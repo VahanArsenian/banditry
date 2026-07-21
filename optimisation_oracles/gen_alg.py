@@ -1,0 +1,236 @@
+from variable_domains.design_space import DesignSpace
+from enum import Enum
+from typing import Optional
+
+import numpy  as np
+import pandas as pd
+from pymoo.algorithms.moo.unsga3 import UNSGA3
+from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.algorithms.moo.nsga2 import NSGA2
+from pymoo.core.algorithm import Algorithm, default_termination
+
+
+from pymoo.util.ref_dirs import get_reference_directions
+
+from pymoo.core.mixed import  MixedVariableGA, MixedVariableMating, MixedVariableDuplicateElimination
+from pymoo.core.population import Population
+from pymoo.optimize import minimize
+from pymoo.core.problem import Problem
+from pymoo.config import Config
+from pymoo.termination import get_termination
+from pymoo.termination.collection import TerminationCollection
+
+Config.show_compile_hint = True
+
+
+
+def get_init_pop(
+    space: DesignSpace,
+    population_size: int,
+    initial_suggest: Optional[pd.DataFrame] = None,
+    selected_para_names: Optional[list[str]] = None,
+) -> Population:
+    active_para_names = list(space.para_names if selected_para_names is None else selected_para_names)
+    unknown_names = [name for name in active_para_names if name not in space.para_names]
+    if unknown_names:
+        raise ValueError(f"Unknown optimisation parameters: {unknown_names}")
+
+    init_pop = space.sample(population_size)
+
+    # Useful for preconditioning, especially for inducing points.
+    if initial_suggest is not None:
+        init_pop = pd.concat([initial_suggest[space.para_names], init_pop], axis=0).head(population_size)
+
+    x_num, x_cat = space.transform(init_pop[space.para_names])
+    init_pop = np.hstack([x_num.numpy(), x_cat.numpy().astype(float)])
+    name_to_idx = {name: i for i, name in enumerate(space.para_names)}
+    pop_lst = []
+    for item in init_pop:
+        pop_item = {}
+        for name in active_para_names:
+            i = name_to_idx[name]
+            if name in space.enum_names:
+                pop_item[name] = int(item[i])
+            else:
+                pop_item[name] = item[i]
+        pop_lst.append(pop_item)
+    pop = Population.new(X = pop_lst)
+    return pop
+
+
+class GAEnum(Enum):
+    nsga3 = NSGA3
+    unsga3 = UNSGA3 # Different tournament mechanism (computes pressure potential rather than random)
+    msga = MixedVariableGA
+    nsga2 = NSGA2
+
+    @classmethod
+    def compute_intense(cls):
+        return [GAEnum.nsga3, GAEnum.unsga3]
+    
+    def is_compute_intense(self):
+        return self in self.compute_intense()
+
+    @classmethod
+    def determine(cls, n_obj: int, compute_budget_high = True):
+        if n_obj <= 2:
+            return cls.unsga3 if compute_budget_high else cls.msga
+        else:
+            return cls.nsga3 if compute_budget_high else cls.nsga2
+        
+    def auto(self, n_dim=1, n_points=128, **kwargs) -> Algorithm:
+        if self.is_compute_intense():
+            ref_dir = get_reference_directions("energy", n_dim=n_dim, n_points=n_points)
+            # Repair for NSGA3 may not work properly, so we may need to move to value conditioning 
+            return self.value(ref_dirs=ref_dir, 
+                        mating=MixedVariableMating(eliminate_duplicates = MixedVariableDuplicateElimination()),
+                        eliminate_duplicates = MixedVariableDuplicateElimination(),
+                          **kwargs)
+        else:
+            return self.value(MixedVariableMating(eliminate_duplicates = MixedVariableDuplicateElimination()), 
+                        eliminate_duplicates = MixedVariableDuplicateElimination(),
+                        **kwargs)
+
+class EvolutionOpt:
+    def __init__(self,
+            design_space : DesignSpace,
+            **conf):
+        self.space = design_space
+        self.pop = conf.get('pop', 100)
+        self.max_iters = conf.get('max_iters', 500)
+        self.verbose = conf.get('verbose', False)
+        self.repair = conf.get('repair', None)
+        self.sobol_init = conf.get('sobol_init', True)
+
+
+    def termnation_condition(self, problem: Problem):
+        def_term = default_termination(problem)
+        max_iter_term = get_termination('n_gen', self.max_iters)
+        return TerminationCollection(def_term, max_iter_term)
+
+    @staticmethod
+    def _as_candidate_list(candidates) -> list:
+        if candidates is None:
+            return []
+        if isinstance(candidates, dict):
+            return [candidates]
+        if isinstance(candidates, np.ndarray):
+            arr = np.asarray(candidates)
+            if arr.ndim == 0:
+                return [arr.item()]
+            if arr.dtype == object:
+                return arr.reshape(-1).tolist()
+            if arr.ndim == 1:
+                return [arr]
+            return [row for row in arr]
+        return list(candidates)
+
+    @staticmethod
+    def _candidate_frame(candidates: list, active_para_names: list[str]) -> pd.DataFrame:
+        if len(candidates) == 0:
+            return pd.DataFrame(columns=active_para_names)
+
+        first = candidates[0]
+        if isinstance(first, dict):
+            df_candidates = pd.DataFrame(candidates)
+        else:
+            arr = np.asarray(candidates, dtype=float)
+            if arr.ndim == 1:
+                if len(active_para_names) == 1:
+                    arr = arr.reshape(-1, 1)
+                else:
+                    arr = arr.reshape(1, -1)
+            df_candidates = pd.DataFrame(arr, columns=active_para_names)
+
+        return df_candidates[active_para_names]
+
+    def _decode_candidates(
+        self,
+        candidates: list,
+        active_para_names: list[str],
+        fix_input: dict,
+    ) -> pd.DataFrame:
+        df_candidates = self._candidate_frame(candidates, active_para_names)
+        n_rows = df_candidates.shape[0]
+        df_out = pd.DataFrame(index=range(n_rows), columns=self.space.para_names)
+
+        active_set = set(active_para_names)
+        for name in self.space.para_names:
+            if name in active_set:
+                transformed = pd.to_numeric(df_candidates[name], errors="raise").to_numpy(dtype=float)
+                df_out[name] = self.space.paras[name].inverse_transform(transformed)
+            elif name in fix_input:
+                df_out[name] = fix_input[name]
+            else:
+                raise ValueError(f"Cannot reconstruct parameter '{name}' from optimiser output.")
+        return df_out[self.space.para_names]
+
+    def _fixed_only_recommendation(self, fix_input: dict, initial_suggest: Optional[pd.DataFrame]) -> pd.DataFrame:
+        seed_row = None
+        if initial_suggest is not None and not initial_suggest.empty:
+            seed_row = initial_suggest.iloc[0]
+
+        row = {}
+        missing = []
+        for name in self.space.para_names:
+            if name in fix_input:
+                row[name] = fix_input[name]
+            elif seed_row is not None and name in seed_row:
+                row[name] = seed_row[name]
+            else:
+                missing.append(name)
+
+        if missing:
+            raise ValueError(f"No free variables to optimise but missing fixed values for: {missing}")
+        return pd.DataFrame([row], columns=self.space.para_names)
+
+
+    def optimise(self, problem: Problem, initial_suggest : pd.DataFrame = None,
+                 return_pop = False, method: GAEnum = None,
+                 seed: Optional[int] = None) -> pd.DataFrame:
+        fix_input = getattr(problem, "fix", None) or {}
+
+        problem_vars = getattr(problem, "vars", None)
+        active_para_names = list(self.space.para_names) if problem_vars is None else list(problem_vars.keys())
+
+        if len(active_para_names) == 0:
+            self.res = None
+            return self._fixed_only_recommendation(fix_input, initial_suggest)
+
+        init_pop = get_init_pop(self.space, self.pop, initial_suggest, active_para_names)
+
+        if method is None:
+            method = GAEnum.determine(problem.n_obj, compute_budget_high=True)
+
+        algo = method.auto(n_dim=problem.n_obj, n_points=self.pop, pop_size = self.pop,
+                           repair = self.repair, sampling = init_pop)
+
+        # pymoo.minimize(seed=None) draws from a non-deterministic source
+        # rather than the globally-seeded numpy RNG, so reproducibility
+        # requires an explicit seed. We derive one from np.random — which
+        # IS seeded by Experiment.run's seed_everything — so the chain
+        # stays deterministic without any per-call seed plumbing upstream.
+        if seed is None:
+            seed = int(np.random.randint(0, 2**31 - 1))
+
+        res = minimize(problem, algo,
+                       termination=self.termnation_condition(problem),
+                       seed=seed,
+                       verbose = self.verbose)
+
+        if res.X is None:
+            import logging_utils as log
+            log.debug("Optimisation terminated with no solutions found")
+
+        if res.X is not None and not return_pop:
+            candidates = self._as_candidate_list(res.X)
+        else:
+            candidates = [p for p in res.pop]
+            if problem.n_obj == 1 and not return_pop and len(candidates) > 0:
+                candidates = [candidates[np.random.choice(len(candidates))]]
+            candidates = sorted(candidates, key=lambda x: x.F[0])
+            candidates = [c.X for c in candidates]
+            
+        
+        self.res = res
+        return self._decode_candidates(candidates, active_para_names, fix_input)
