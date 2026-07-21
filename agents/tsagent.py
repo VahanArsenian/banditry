@@ -10,7 +10,6 @@ from sampling_oracles.langevin_sampler import LangevinSampler
 from sampling_oracles.sampler import NLL, Sampler
 from surrogates.tsmodel import ValueFunction
 from variable_domains.design_space import DesignSpace
-from constants import PI_SQUARED
 
 import logging_utils as log
 
@@ -29,11 +28,7 @@ class TSAgent(AbstractAgent):
         sampler_config: Optional[dict] = None,
         nll: NLL | None = None,
         should_warm_start: bool = False,
-        regret_ub_coeff: float = 1.0,
-        function_scale: float = 1.0,
         latent_dimension: Optional[float] = None,
-        delta: float = 0.01,
-        paremeter_space_l1_diameter: float = 1.0
     ):
         super().__init__(space, rand_sample=rand_sample)
         self.model_config = {} if model_config is None else dict(model_config)
@@ -43,12 +38,8 @@ class TSAgent(AbstractAgent):
         self.nll = nll
         self.should_warm_start = should_warm_start
         self.warm_start_model: ValueFunction | None = None
-        self.regret_ub_coeff = float(regret_ub_coeff)
-        self.function_scale = float(function_scale)
         self._num_samplable_params: Optional[int] = None
         self.latent_dimension = latent_dimension if latent_dimension is not None else self.num_samplable_params()
-        self.delta = delta
-        self.paremeter_space_l1_diameter = paremeter_space_l1_diameter
 
     def _value_function_config(self) -> dict:
         cfg = dict(self.model_config)
@@ -125,22 +116,4 @@ class TSAgent(AbstractAgent):
                 p.numel() for p in vf.parameters() if p.requires_grad
             )
         return self._num_samplable_params
-
-    def regret_upper_bound(self, exploration_scale=1):
-        tv = self.sampler.total_variation() # TODO: Incorporate the TV proxy 
-        T = max(1, self.X.shape[0])
-        log_complexity = np.log(self.paremeter_space_l1_diameter*T*PI_SQUARED*self.num_samplable_params()/(3*self.delta))
-        return self.function_scale*np.sqrt(T*(self.num_samplable_params())*self.latent_dimension*log_complexity)
-
-    def function_class_context_projected_width(self, **kwargs) -> float:
-        return self.function_scale
-
-    def custom_score_info(self) -> tuple[str, dict[str, str]]:
-        return (
-            "TSAgent",
-            {
-                "B_T": f"{self.paremeter_space_l1_diameter:.3g}",
-                "d_th": f"{self.num_samplable_params():.3g}",
-            },
-        )
 

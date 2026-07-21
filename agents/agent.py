@@ -130,21 +130,6 @@ class AbstractAgent(ABC):
     def n_plays(self):
         return len(self.y)
 
-    def regret_upper_bound(self, **kwargs):
-        pass
-
-    def custom_score_info(self) -> tuple[str, dict[str, str]]:
-        """Per-agent `(group_label, {short_label: value_str})` pair used by
-        the MetaFrieren scores renderer. `group_label` names a subtable
-        that arms reporting the same label share; `cells` are the
-        per-arm key/value diagnostics rendered in that subtable's
-        columns. Subclasses override to expose their own diagnostics
-        (e.g. noise estimate, realised information gain)."""
-        return ("default", {})
-
-    def function_class_context_projected_width(self, **kwargs) -> float:
-        raise NotImplementedError
-
     def label_params(self) -> dict:
         """Structural attributes that distinguish a variant of this agent
         class, used by `labels.agent_display_name` to build the

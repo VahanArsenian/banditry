@@ -32,11 +32,7 @@ class TSConfig(AgentConfig):
     model_config: dict = field(default_factory=dict)
     sampler_config: Optional[dict] = None                # None -> per-sampler default below
     should_warm_start: bool = True
-    regret_ub_coeff: float = 1.0                         # carried in custom_score_info as B_T
-    function_scale: float = 1.0                          # value returned by function_class_context_projected_width()
     latent_dimension: Optional[float] = None             # None -> TSAgent.num_samplable_params() at build time
-    delta: float = 0.01                                  # confidence parameter in the regret bound's log term
-    paremeter_space_l1_diameter: float = 1.0             # B (parameter-space L1 diameter) in the regret bound
 
 
 DEFAULT_NUTS_CONFIG: dict = {
@@ -94,11 +90,7 @@ def build_agent(config: AgentConfig, space: DesignSpace) -> AbstractAgent:
             nll=nll,
             model_config=config.model_config,
             should_warm_start=config.should_warm_start,
-            regret_ub_coeff=config.regret_ub_coeff,
-            function_scale=config.function_scale,
             latent_dimension=config.latent_dimension,
-            delta=config.delta,
-            paremeter_space_l1_diameter=config.paremeter_space_l1_diameter,
         )
     raise TypeError(f"Unknown config type: {type(config).__name__}")
 

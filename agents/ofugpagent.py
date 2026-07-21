@@ -69,7 +69,7 @@ class OFUGPAgent(AbstractAgent):
     ):
         super().__init__(space, rand_sample=rand_sample)
         if noise_std_proxy is None:
-            raise ValueError("noise_std_proxy is required (sub-Gaussian / GP noise scale used by both the frequentist β_t and the c_s = 8/log(1+σ⁻²) constant in the regret bound)")
+            raise ValueError("noise_std_proxy is required (sub-Gaussian / GP noise scale used by the frequentist β_t and the realised information gain)")
         self.surrogate = surrogate
         self.acq_cls = acq_cls
         self.delta = delta
@@ -79,9 +79,7 @@ class OFUGPAgent(AbstractAgent):
         self._rkhs_norm = rkhs_norm
         self.noise_std_proxy = noise_std_proxy
         self._realised_information_gain = 0.0
-        self._last_noise_est: float = float(noise_std_proxy)
         self._pending_var_t: Optional[np.ndarray] = None
-        self._pending_noise_est: Optional[float] = None
 
     def get_model(self, X, Xe, y):
         model = self.surrogate.value(self.space.num_numeric, 
@@ -143,7 +141,6 @@ class OFUGPAgent(AbstractAgent):
                 select_id[1] = best_pred_id
             rec_selected = rec.iloc[select_id].copy()
             self._pending_var_t = ps2_all[select_id]
-            self._pending_noise_est = float(model.noise.view(-1)[0].sqrt().item())
         model.pred_likeli = prev_pred_likeli
         return rec_selected
 
@@ -151,9 +148,7 @@ class OFUGPAgent(AbstractAgent):
    
         if self._pending_var_t is not None:
             var_t = self._pending_var_t
-            self._last_noise_est = self._pending_noise_est
             self._pending_var_t = None
-            self._pending_noise_est = None
         elif len(self.y) > 0:
             try:
                 Xc_prev, Xe_prev, y_prev = self.prepare_data()
@@ -163,7 +158,6 @@ class OFUGPAgent(AbstractAgent):
                 with torch.no_grad():
                     _, var_new = model.predict(xc_new, xe_new)
                 var_t = var_new.detach().cpu().numpy().reshape(-1)
-                self._last_noise_est = float(model.noise.view(-1)[0].sqrt().item())
             except Exception:
                 import logging_utils as log
                 log.debug("OFUGPAgent.observe: GP fit failed; falling back to prior variance")
@@ -172,27 +166,6 @@ class OFUGPAgent(AbstractAgent):
             var_t = np.ones(len(X))
         self._realised_information_gain += 0.5 * float(np.log1p(var_t / self.noise_std_proxy**2).sum())
         super().observe(X, y)
-
-    def custom_score_info(self) -> tuple[str, dict[str, str]]:
-        return (
-            "OFUGPAgent",
-            {
-                "σ̂ₜ": f"{self._last_noise_est:.3g}",
-                "Îₜ": f"{self._realised_information_gain:.3g}",
-            },
-        )
-
-    def regret_upper_bound(self, exploration_scale=1):
-        kappa = self.kappa(n_suggestions=1)
-        T = max(1, self.n_plays())
-        C_1 = 8/np.log(1+self.noise_std_proxy**(-2))
-        return exploration_scale * np.sqrt(C_1 * kappa * T * self._realised_information_gain) + 2
-
-    def function_class_context_projected_width(self, context_dim=None, context_width=None, **kwargs) -> float:
-        if self.frequentist:
-            return self._rkhs_norm
-        else:
-            return context_dim * context_width * np.sqrt(2)
 
     def label_params(self) -> dict:
         return {
