@@ -8,8 +8,6 @@ touching any stored artefacts.
 
 from __future__ import annotations
 
-from typing import Optional
-
 
 def _ofugp_name(params: dict) -> str:
     frequentist = bool(params.get("frequentist"))
@@ -41,6 +39,6 @@ _AGENT_DISPATCH = {
 }
 
 
-def agent_display_name(agent_type: str, params: Optional[dict] = None) -> str:
+def agent_display_name(agent_type: str, params: dict | None = None) -> str:
     fn = _AGENT_DISPATCH.get(agent_type)
     return fn(params or {}) if fn is not None else agent_type

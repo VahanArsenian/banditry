@@ -1,23 +1,25 @@
-import pandas as pd
-import numpy  as np
 from abc import ABC, abstractmethod
+
+import numpy as np
+import pandas as pd
+
 
 class Parameter(ABC):
     def __init__(self, param_dict):
         self.param_dict = param_dict
-        self.name = param_dict['name']
+        self.name = param_dict["name"]
         pass
 
     @abstractmethod
-    def sample(self, num = 1) -> pd.DataFrame:
+    def sample(self, num=1) -> pd.DataFrame:
         pass
 
     @abstractmethod
-    def transform(self, x : np.array) -> np.array:
+    def transform(self, x: np.array) -> np.array:
         pass
 
     @abstractmethod
-    def inverse_transform(self, x : np.array) -> np.array:
+    def inverse_transform(self, x: np.array) -> np.array:
         pass
 
     @property
@@ -39,7 +41,6 @@ class Parameter(ABC):
     def is_categorical(self) -> bool:
         return not self.is_numeric
 
-
     @property
     @abstractmethod
     def opt_lb(self) -> float:
@@ -54,11 +55,11 @@ class Parameter(ABC):
 class NumericParameter(Parameter):
     def __init__(self, param_dict):
         super().__init__(param_dict)
-        self.lb = param_dict['lb']
-        self.ub = param_dict['ub']
+        self.lb = param_dict["lb"]
+        self.ub = param_dict["ub"]
 
-    def sample(self, num = 1):
-        assert(num > 0)
+    def sample(self, num=1):
+        assert num > 0
         return np.random.uniform(self.lb, self.ub, num)
 
     def transform(self, x):
@@ -91,19 +92,19 @@ class NumericParameter(Parameter):
 class CategoricalParameter(Parameter):
     def __init__(self, param):
         super().__init__(param)
-        self.categories = list(param['categories'])
+        self.categories = list(param["categories"])
         try:
-            self._categories_dict = {k:v for v, k in enumerate(self.categories)}
+            self._categories_dict = {k: v for v, k in enumerate(self.categories)}
         except TypeError:
             self._categories_dict = None
         self.lb = 0
         self.ub = len(self.categories) - 1
 
-    def sample(self, num = 1):
-        assert(num > 0)
-        return np.random.choice(self.categories, num, replace = True)
+    def sample(self, num=1):
+        assert num > 0
+        return np.random.choice(self.categories, num, replace=True)
 
-    def transform(self, x : np.ndarray):
+    def transform(self, x: np.ndarray):
         if self._categories_dict:
             ret = np.array(list(map(lambda a: self._categories_dict[a], x)))
         else:
@@ -144,9 +145,9 @@ class BoolParameter(Parameter):
         self.lb = 0
         self.ub = 1
 
-    def sample(self, num = 1):
-        assert(num > 0)
-        return np.random.choice([True, False], num, replace = True)
+    def sample(self, num=1):
+        assert num > 0
+        return np.random.choice([True, False], num, replace=True)
 
     def transform(self, x):
         return x.astype(float)
@@ -156,7 +157,7 @@ class BoolParameter(Parameter):
 
     @property
     def is_numeric(self):
-        return True 
+        return True
 
     @property
     def is_discrete(self):
@@ -173,17 +174,17 @@ class BoolParameter(Parameter):
     @property
     def opt_ub(self):
         return self.ub
-    
+
 
 class IntParameter(Parameter):
     def __init__(self, param_dict):
         super().__init__(param_dict)
-        self.lb   = round(param_dict['lb'])
-        self.ub   = round(param_dict['ub'])
+        self.lb = round(param_dict["lb"])
+        self.ub = round(param_dict["ub"])
 
-    def sample(self, num = 1):
-        assert(num > 0)
-        return np.random.randint(self.lb, self.ub+1, num)
+    def sample(self, num=1):
+        assert num > 0
+        return np.random.randint(self.lb, self.ub + 1, num)
 
     def transform(self, x):
         return x.astype(float)
@@ -210,4 +211,3 @@ class IntParameter(Parameter):
     @property
     def is_discrete_after_transform(self):
         return True
-

@@ -27,6 +27,7 @@ class _ModelWrapper:
     def __call__(self, Xc, Xe, **kwargs):
         if self._params is not None:
             from torch.func import functional_call
+
             return functional_call(self._base, self._params, (Xc, Xe), kwargs)
         return self._base(Xc, Xe, **kwargs)
 
@@ -56,7 +57,7 @@ class FeelGoodNLL(NLL):
 
     def __call__(self, fix_input: dict, space, X: pd.DataFrame) -> Callable[..., FloatTensor]:
         from banditry.optimisation_oracles.gen_alg import EvolutionOpt
-        from banditry.optimisation_subroutines.contextal_problem import ContextualProblem
+        from banditry.optimisation_subroutines.contextual_problem import ContextualProblem
         from banditry.optimisation_subroutines.objectives import ThompsonObjective
 
         context_names = list(fix_input.keys())
@@ -65,9 +66,9 @@ class FeelGoodNLL(NLL):
             contexts = [{}]
             counts = [len(X)]
         else:
-            grouped = X.groupby(context_names).size().reset_index(name='count')
-            contexts = grouped[context_names].to_dict('records')
-            counts = grouped['count'].tolist()
+            grouped = X.groupby(context_names).size().reset_index(name="count")
+            contexts = grouped[context_names].to_dict("records")
+            counts = grouped["count"].tolist()
 
         fg_lambda = self.fg_lambda
         fg_bound = self.fg_bound
@@ -75,17 +76,17 @@ class FeelGoodNLL(NLL):
         def nll_fn(pred: FloatTensor, target: FloatTensor, obs_std: FloatTensor, **kwargs) -> FloatTensor:
             base_nll = _gaussian_nll(pred, target, obs_std)
 
-            model = kwargs.get('model')
-            model_params = kwargs.get('model_params')
+            model = kwargs.get("model")
+            model_params = kwargs.get("model_params")
 
             if model is None or fg_lambda == 0:
                 return base_nll
 
             eval_model = _ModelWrapper(model, model_params)
-            num_data = kwargs.get('num_data', pred.shape[0])
+            num_data = kwargs.get("num_data", pred.shape[0])
 
             fg_values = []
-            for ctx, count in zip(contexts, counts):
+            for ctx, count in zip(contexts, counts, strict=True):
                 objective = ThompsonObjective(eval_model)
                 problem = ContextualProblem(objective, space, ctx)
                 opt = EvolutionOpt(space, pop=5, max_iters=2, verbose=False)
@@ -149,18 +150,14 @@ class Sampler(ABC):
         if model.num_cont > 0:
             Xc_t = Xc.float()
             if Xc_t.shape[0] != n or Xc_t.shape[1] != model.num_cont:
-                raise ValueError(
-                    f"Expected Xc shape ({n}, {model.num_cont}), got {tuple(Xc_t.shape)}."
-                )
+                raise ValueError(f"Expected Xc shape ({n}, {model.num_cont}), got {tuple(Xc_t.shape)}.")
         else:
             Xc_t = torch.zeros(n, 0, device=device, dtype=y_t.dtype)
 
         if model.num_enum > 0:
             Xe_t = Xe.long()
             if Xe_t.shape[0] != n or Xe_t.shape[1] != model.num_enum:
-                raise ValueError(
-                    f"Expected Xe shape ({n}, {model.num_enum}), got {tuple(Xe_t.shape)}."
-                )
+                raise ValueError(f"Expected Xe shape ({n}, {model.num_enum}), got {tuple(Xe_t.shape)}.")
         else:
             Xe_t = torch.zeros(n, 0, device=device, dtype=torch.long)
 
@@ -172,7 +169,9 @@ class Sampler(ABC):
             dropped_indices = torch.nonzero(~valid, as_tuple=False).view(-1).tolist()
             logger.warning(
                 "Dropping %d/%d rows due to non-finite y/Xc values; first dropped indices: %s",
-                dropped, n, dropped_indices[:5],
+                dropped,
+                n,
+                dropped_indices[:5],
             )
         if not valid.any():
             raise ValueError("No finite rows available for posterior sampling.")

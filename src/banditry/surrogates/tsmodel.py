@@ -1,5 +1,5 @@
-from copy import deepcopy
 from collections.abc import Callable
+from copy import deepcopy
 
 import torch
 import torch.nn as nn
@@ -14,17 +14,17 @@ from banditry.variable_domains.transforms import (
 
 def default_network_builder(in_dim: int, out_dim: int) -> nn.Module:
     # Non linear Neural net, 2 layers hidden dim 128, activation Swiglu
-    
+
     layers = []
-    layers.append(nn.Linear(in_dim, 2*in_dim))
-    layers.append(nn.LayerNorm(2*in_dim))
+    layers.append(nn.Linear(in_dim, 2 * in_dim))
+    layers.append(nn.LayerNorm(2 * in_dim))
     layers.append(nn.Tanh())
 
-    layers.append(nn.Linear(2*in_dim, 2*in_dim))
-    layers.append(nn.LayerNorm(2*in_dim))
+    layers.append(nn.Linear(2 * in_dim, 2 * in_dim))
+    layers.append(nn.LayerNorm(2 * in_dim))
     layers.append(nn.Tanh())
 
-    layers.append(nn.Linear(2*in_dim, out_dim))
+    layers.append(nn.Linear(2 * in_dim, out_dim))
     return nn.Sequential(*layers)
 
 
@@ -154,4 +154,3 @@ class ValueFunction(nn.Module):
 
     def predict(self, Xc: FloatTensor | None, Xe: LongTensor | None) -> FloatTensor:
         return self.forward(Xc, Xe)
-

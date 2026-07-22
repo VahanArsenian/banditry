@@ -1,17 +1,17 @@
 import enum
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import numpy as np
 import torch
 
-from banditry.variable_domains.design_space import DesignSpace
-from banditry.surrogates.svgp import SVGP
-from banditry.surrogates.gp import GP
-from banditry.optimisation_subroutines.objectives import MACE, LCB
-from banditry.optimisation_subroutines.contextal_problem import ContextualProblem
-from banditry.optimisation_oracles.gen_alg import EvolutionOpt
 from banditry.agents.agent import AbstractAgent
 from banditry.constants import PI_SQUARED
+from banditry.optimisation_oracles.gen_alg import EvolutionOpt
+from banditry.optimisation_subroutines.contextual_problem import ContextualProblem
+from banditry.optimisation_subroutines.objectives import LCB, MACE
+from banditry.surrogates.gp import GP
+from banditry.surrogates.svgp import SVGP
+from banditry.variable_domains.design_space import DesignSpace
 
 
 class ModelEnum(enum.Enum):
@@ -22,28 +22,26 @@ class ModelEnum(enum.Enum):
     def default_scaling(self):
         if self == ModelEnum.svgp:
             return 0
-    
+
     @property
     def is_multi_objective(self):
         if self == ModelEnum.svgp:
             return False
-        
-    def model_config(self, space: DesignSpace, configs_to_override={}):
+
+    def model_config(self, space: DesignSpace, configs_to_override=None):
         cfg = {}
         if self == ModelEnum.svgp:
-            cfg = {"batch_size": 128,
-              "num_inducing": 256,
-              "use_ngd": False}
+            cfg = {"batch_size": 128, "num_inducing": 256, "use_ngd": False}
         if self == ModelEnum.gp:
             cfg = {
-                    "lr": 0.01,
-                    "num_epochs": 100,
-                    "verbose": False,
-                    "noise_lb": 8e-4,
-                    "pred_likeli": True,
-                    "optimizer": "adam",
-                }
-        cfg.update(configs_to_override)
+                "lr": 0.01,
+                "num_epochs": 100,
+                "verbose": False,
+                "noise_lb": 8e-4,
+                "pred_likeli": True,
+                "optimizer": "adam",
+            }
+        cfg.update(configs_to_override or {})
         if space.num_categorical > 0:
             cfg["num_uniqs"] = [len(space.paras[name].categories) for name in space.enum_names]
         return cfg
@@ -64,12 +62,15 @@ class OFUGPAgent(AbstractAgent):
         model_config=None,
         frequentist: bool = False,
         delta=0.01,
-        kappa_fn: Optional[Callable[["OFUGPAgent", int], float]] = None,
-        rkhs_norm = None,
+        kappa_fn: Callable[["OFUGPAgent", int], float] | None = None,
+        rkhs_norm=None,
     ):
         super().__init__(space, rand_sample=rand_sample)
         if noise_std_proxy is None:
-            raise ValueError("noise_std_proxy is required (sub-Gaussian / GP noise scale used by the frequentist β_t and the realised information gain)")
+            raise ValueError(
+                "noise_std_proxy is required (sub-Gaussian / GP noise scale used by "
+                "the frequentist β_t and the realised information gain)"
+            )
         self.surrogate = surrogate
         self.acq_cls = acq_cls
         self.delta = delta
@@ -79,21 +80,24 @@ class OFUGPAgent(AbstractAgent):
         self._rkhs_norm = rkhs_norm
         self.noise_std_proxy = noise_std_proxy
         self._realised_information_gain = 0.0
-        self._pending_var_t: Optional[np.ndarray] = None
+        self._pending_var_t: np.ndarray | None = None
 
     def get_model(self, X, Xe, y):
-        model = self.surrogate.value(self.space.num_numeric, 
-                                        self.space.num_categorical, 1, 
-                                        **self.surrogate.model_config(self.space, self.model_config))
+        model = self.surrogate.value(
+            self.space.num_numeric,
+            self.space.num_categorical,
+            1,
+            **self.surrogate.model_config(self.space, self.model_config),
+        )
         model.fit(X, Xe, y)
         return model
 
     def kappa(self, n_suggestions):
-        #TODO: Rework 
+        # TODO: Rework
         if self._kappa_fn is not None:
             return self._kappa_fn(self, n_suggestions)
 
-        # The benefit of this is arguable 
+        # The benefit of this is arguable
         t = max(1, self.n_plays() // n_suggestions)
         d = self.X.shape[1]
         delta = self.delta
@@ -101,7 +105,9 @@ class OFUGPAgent(AbstractAgent):
         if self.frequentist:
             if self._rkhs_norm is None:
                 raise ValueError("rkhs_norm must be provided for the frequentist setting")
-            beta_t = self._rkhs_norm + 4*self.noise_std_proxy*np.sqrt(self._realised_information_gain + 1 + np.log(1/delta))
+            beta_t = self._rkhs_norm + 4 * self.noise_std_proxy * np.sqrt(
+                self._realised_information_gain + 1 + np.log(1 / delta)
+            )
             # Already square rooted
             return beta_t
         else:
@@ -111,8 +117,8 @@ class OFUGPAgent(AbstractAgent):
     def pick_action(self, model, fix_input, n_suggestions=1):
         if self.acq_cls != MACE and n_suggestions != 1:
             raise RuntimeError("Parallel optimization is supported only for MACE acquisition")
-        
-        best_id = self.get_best_id(fix_input) 
+
+        best_id = self.get_best_id(fix_input)
         best_x = self.X.iloc[[best_id]]
 
         py_best, _ = model.predict(*self.space.transform(best_x))
@@ -145,7 +151,7 @@ class OFUGPAgent(AbstractAgent):
         return rec_selected
 
     def observe(self, X, y):
-   
+
         if self._pending_var_t is not None:
             var_t = self._pending_var_t
             self._pending_var_t = None
@@ -160,6 +166,7 @@ class OFUGPAgent(AbstractAgent):
                 var_t = var_new.detach().cpu().numpy().reshape(-1)
             except Exception:
                 import banditry.logging_utils as log
+
                 log.debug("OFUGPAgent.observe: GP fit failed; falling back to prior variance")
                 var_t = np.ones(len(X))
         else:

@@ -1,8 +1,9 @@
 # banditry
 
+[![CI](https://github.com/VahanArsenian/banditry/actions/workflows/ci.yml/badge.svg)](https://github.com/VahanArsenian/banditry/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/banditry)](https://pypi.org/project/banditry/)
 [![Python](https://img.shields.io/pypi/pyversions/banditry)](https://pypi.org/project/banditry/)
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Contextual bandit agents for black-box optimisation over mixed design spaces.
 
@@ -196,13 +197,13 @@ config = TSConfig(
 
 ### Benchmark runner
 
-The repository ships a CLI runner (not part of the installed package) that
-exercises every agent on synthetic benchmarks:
+Installing the package also installs a `banditry-bench` CLI that exercises
+every agent on synthetic benchmarks:
 
 ```bash
-python main.py --agent ofugp-gp    --benchmark branin          --n-iter 30 --seed 42
-python main.py --agent ts-langevin --benchmark gaussian_valley --n-iter 30 --seed 42
-python main.py --agent ofugp-svgp  --benchmark contextual_branin --n-iter 30 --seed 42
+banditry-bench --agent ofugp-gp    --benchmark branin          --n-iter 30 --seed 42
+banditry-bench --agent ts-langevin --benchmark gaussian_valley --n-iter 30 --seed 42
+banditry-bench --agent ofugp-svgp  --benchmark contextual_branin --n-iter 30 --seed 42
 ```
 
 Agents: `ofugp-gp`, `ofugp-svgp`, `ts-langevin`, `ts-nuts`. Benchmarks:
@@ -227,11 +228,11 @@ If you use `banditry` in your research, please cite:
   title   = {banditry: contextual bandit agents with Gaussian-process surrogates},
   year    = {2026},
   url     = {https://github.com/VahanArsenian/banditry},
-  version = {0.1.0}
+  version = {0.2.0}
 }
 ```
 
 ## License
 
-[CC BY-NC-SA 4.0](LICENSE) — free for non-commercial use with attribution;
-derivatives must be shared under the same terms.
+[MIT](LICENSE). Portions derive from [HEBO](https://github.com/huawei-noah/HEBO)
+(Huawei Noah's Ark Lab), also MIT-licensed — see [NOTICE](NOTICE).

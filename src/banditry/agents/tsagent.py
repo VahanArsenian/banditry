@@ -1,17 +1,14 @@
-from typing import Optional
-
 import numpy as np
 
+import banditry.logging_utils as log
 from banditry.agents.agent import AbstractAgent
 from banditry.optimisation_oracles.gen_alg import EvolutionOpt
+from banditry.optimisation_subroutines.contextual_problem import ContextualProblem
 from banditry.optimisation_subroutines.objectives import ThompsonObjective
-from banditry.optimisation_subroutines.contextal_problem import ContextualProblem
 from banditry.sampling_oracles.langevin_sampler import LangevinSampler
 from banditry.sampling_oracles.sampler import NLL, Sampler
 from banditry.surrogates.tsmodel import ValueFunction
 from banditry.variable_domains.design_space import DesignSpace
-
-import banditry.logging_utils as log
 
 
 class TSAgent(AbstractAgent):
@@ -23,12 +20,12 @@ class TSAgent(AbstractAgent):
         self,
         space: DesignSpace,
         rand_sample=None,
-        model_config: Optional[dict] = None,
+        model_config: dict | None = None,
         sampler_cls: type[Sampler] = LangevinSampler,
-        sampler_config: Optional[dict] = None,
+        sampler_config: dict | None = None,
         nll: NLL | None = None,
         should_warm_start: bool = False,
-        latent_dimension: Optional[float] = None,
+        latent_dimension: float | None = None,
     ):
         super().__init__(space, rand_sample=rand_sample)
         self.model_config = {} if model_config is None else dict(model_config)
@@ -38,7 +35,7 @@ class TSAgent(AbstractAgent):
         self.nll = nll
         self.should_warm_start = should_warm_start
         self.warm_start_model: ValueFunction | None = None
-        self._num_samplable_params: Optional[int] = None
+        self._num_samplable_params: int | None = None
         self.latent_dimension = latent_dimension if latent_dimension is not None else self.num_samplable_params()
 
     def _value_function_config(self) -> dict:
@@ -47,17 +44,16 @@ class TSAgent(AbstractAgent):
             cfg["num_uniqs"] = [self.space.paras[name].num_uniqs for name in self.space.enum_names]
         return cfg
 
-
     def get_model(self, Xc, Xe, y, nll=None) -> ValueFunction:
         if self.should_warm_start and self.warm_start_model is not None:
             initial_model = self.warm_start_model
         else:
             initial_model = ValueFunction(
-            self.space.num_numeric,
-            self.space.num_categorical,
-            1,
-            **self._value_function_config(),
-        )
+                self.space.num_numeric,
+                self.space.num_categorical,
+                1,
+                **self._value_function_config(),
+            )
         sampled_model = self.sampler.sample(initial_model, Xc, Xe, y, nll=nll)
         if self.should_warm_start:
             self.warm_start_model = sampled_model
@@ -77,8 +73,7 @@ class TSAgent(AbstractAgent):
         return {
             "sampler_name": self.sampler_cls.__name__,
             "nll_name": type(self.nll).__name__ if self.nll is not None else None,
-            "latent_dimension": (float(self.latent_dimension)
-                                 if self.latent_dimension is not None else None),
+            "latent_dimension": (float(self.latent_dimension) if self.latent_dimension is not None else None),
         }
 
     def pick_action(self, model, fix_input, n_suggestions=1):
@@ -112,8 +107,5 @@ class TSAgent(AbstractAgent):
                 1,
                 **self._value_function_config(),
             )
-            self._num_samplable_params = sum(
-                p.numel() for p in vf.parameters() if p.requires_grad
-            )
+            self._num_samplable_params = sum(p.numel() for p in vf.parameters() if p.requires_grad)
         return self._num_samplable_params
-

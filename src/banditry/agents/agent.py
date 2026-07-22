@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 import torch
 from torch.quasirandom import SobolEngine
-from banditry.variable_domains.design_space import DesignSpace
 
 import banditry.logging_utils as log
 from banditry.labels import agent_display_name
+from banditry.variable_domains.design_space import DesignSpace
 
 
 class AbstractAgent(ABC):
@@ -21,19 +20,17 @@ class AbstractAgent(ABC):
     def __init__(
         self,
         space: DesignSpace,
-        rand_sample: Optional[int] = None,
+        rand_sample: int | None = None,
     ):
         self.space = space
         self.X = pd.DataFrame(columns=self.space.para_names)
         self.y = np.zeros((0, 1))
-        self.rand_sample = (
-            1 + self.space.num_paras if rand_sample is None else max(2, rand_sample)
-        )
+        self.rand_sample = 1 + self.space.num_paras if rand_sample is None else max(2, rand_sample)
         # SobolEngine is constructed lazily on first use so its scramble
         # is captured from torch's *post-seed* global state (set by
         # Experiment.run's seed_everything), not whatever torch state
         # happens to be live at factory time.
-        self._sobol: Optional[SobolEngine] = None
+        self._sobol: SobolEngine | None = None
 
     @property
     def sobol(self) -> SobolEngine:
@@ -86,7 +83,6 @@ class AbstractAgent(ABC):
 
     def check_unique(self, rec: pd.DataFrame) -> list[bool]:
         return (~pd.concat([self.X, rec], axis=0).duplicated().tail(rec.shape[0]).values).tolist()
-
 
     def _fill_suggestions(self, rec, n_suggestions, fix_input, max_retries=4):
         """Try to fill *rec* to *n_suggestions* rows with unique quasi-random

@@ -6,24 +6,24 @@ import torch.nn.functional as F
 class EmbeddingTransform(nn.Module):
     def __init__(self, num_uniqs, **conf):
         super().__init__()
-        self.emb_sizes = conf.get('emb_sizes')
+        self.emb_sizes = conf.get("emb_sizes")
         if self.emb_sizes is None:
             self.emb_sizes = [min(50, 1 + v // 2) for v in num_uniqs]
-        
+
         self.emb = nn.ModuleList([])
-        for num_uniq, emb_size in zip(num_uniqs, self.emb_sizes):
+        for num_uniq, emb_size in zip(num_uniqs, self.emb_sizes, strict=True):
             self.emb.append(nn.Embedding(num_uniq, emb_size))
 
     @property
     def num_out_list(self) -> list[int]:
         return self.emb_sizes
-    
+
     @property
-    def num_out(self)->int:
+    def num_out(self) -> int:
         return sum(self.emb_sizes)
 
     def forward(self, xe):
-        return torch.cat([self.emb[i](xe[:, i]).view(xe.shape[0], -1) for i in range(len(self.emb))], dim = 1)
+        return torch.cat([self.emb[i](xe[:, i]).view(xe.shape[0], -1) for i in range(len(self.emb))], dim=1)
 
 
 class OneHotTransform(nn.Module):
@@ -36,11 +36,11 @@ class OneHotTransform(nn.Module):
         return self.num_uniqs
 
     @property
-    def num_out(self)->int:
+    def num_out(self) -> int:
         return sum(self.num_uniqs)
 
     def forward(self, xe):
-        return torch.cat([F.one_hot(xe[:, i], self.num_uniqs[i]) for i in range(xe.shape[1])], dim = 1).float()
+        return torch.cat([F.one_hot(xe[:, i], self.num_uniqs[i]) for i in range(xe.shape[1])], dim=1).float()
 
 
 class TorchIdentityScaler(nn.Module):
@@ -53,10 +53,10 @@ class TorchIdentityScaler(nn.Module):
     def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         return x
 
-    def transform(self, x : torch.FloatTensor) -> torch.FloatTensor:
+    def transform(self, x: torch.FloatTensor) -> torch.FloatTensor:
         return self.forward(x)
 
-    def inverse_transform(self, x : torch.FloatTensor) -> torch.FloatTensor:
+    def inverse_transform(self, x: torch.FloatTensor) -> torch.FloatTensor:
         return x
 
 
@@ -68,7 +68,7 @@ class TorchStandardScaler(nn.Module):
         self.fitted = False
 
     def fit(self, x: torch.FloatTensor):
-        assert(x.dim() == 2)
+        assert x.dim() == 2
         with torch.no_grad():
             finite = torch.isfinite(x)
             count = finite.sum(dim=0)
@@ -84,8 +84,8 @@ class TorchStandardScaler(nn.Module):
             invalid = (count == 0) | (~torch.isfinite(mean)) | (~torch.isfinite(std)) | (std <= 0)
             self.mean = mean.clone()
             self.std = std.clone()
-            self.mean[invalid] = 0.
-            self.std[invalid] = 1.
+            self.mean[invalid] = 0.0
+            self.std[invalid] = 1.0
             self.fitted = True
         return self
 
@@ -109,19 +109,20 @@ class TorchStandardScaler(nn.Module):
         mean, std = self._stats_for(x)
         return x * std + mean
 
+
 class TorchMinMaxScaler(nn.Module):
     def __init__(self, range: tuple = (0, 1)):
         super().__init__()
         self.range_lb = float(range[0])
         self.range_ub = float(range[1])
-        assert (self.range_ub > self.range_lb )
+        assert self.range_ub > self.range_lb
 
         self.scale_ = None
         self.min_ = None
         self.fitted = False
 
     def fit(self, x: torch.FloatTensor):
-        assert(x.dim() == 2)
+        assert x.dim() == 2
         with torch.no_grad():
             finite = torch.isfinite(x)
             valid_count = finite.sum(dim=0)
@@ -140,8 +141,8 @@ class TorchMinMaxScaler(nn.Module):
 
             self.scale_ = scale.clone()
             self.min_ = min_offset.clone()
-            self.scale_[invalid] = 1.
-            self.min_[invalid] = 0.
+            self.scale_[invalid] = 1.0
+            self.min_[invalid] = 0.0
             self.fitted = True
         return self
 
@@ -166,20 +167,19 @@ class TorchMinMaxScaler(nn.Module):
         return (x - min_offset) / scale
 
 
-
 class DummyFeatureExtractor(nn.Module):
-    def __init__(self, num_cont, num_enum, num_uniqs = None, emb_sizes = None):
+    def __init__(self, num_cont, num_enum, num_uniqs=None, emb_sizes=None):
         super().__init__()
         self.num_cont = num_cont
         self.num_enum = num_enum
         self.total_dim = num_cont
         if num_enum > 0:
             assert num_uniqs is not None
-            self.emb_trans  = EmbeddingTransform(num_uniqs, emb_sizes = emb_sizes)
+            self.emb_trans = EmbeddingTransform(num_uniqs, emb_sizes=emb_sizes)
             self.total_dim += self.emb_trans.num_out
 
     def forward(self, x: torch.FloatTensor, xe: torch.LongTensor):
         x_all = x
         if self.num_enum > 0:
-            x_all = torch.cat([x, self.emb_trans(xe)], dim = 1)
+            x_all = torch.cat([x, self.emb_trans(xe)], dim=1)
         return x_all

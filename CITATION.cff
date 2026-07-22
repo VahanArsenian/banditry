@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use banditry in your research, please cite it as below."
+type: software
+title: "banditry: contextual bandit agents with Gaussian-process surrogates"
+authors:
+  - family-names: Arsenyan
+    given-names: Vahan
+version: 0.2.0
+date-released: 2026-07-22
+license: MIT
+repository-code: "https://github.com/VahanArsenian/banditry"
+url: "https://github.com/VahanArsenian/banditry"
+keywords:
+  - bandits
+  - contextual-bandits
+  - bayesian-optimisation
+  - gaussian-process
+  - thompson-sampling

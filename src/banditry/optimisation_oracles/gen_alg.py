@@ -1,34 +1,30 @@
-from banditry.variable_domains.design_space import DesignSpace
 from enum import Enum
-from typing import Optional
 
-import numpy  as np
+import numpy as np
 import pandas as pd
-from pymoo.algorithms.moo.unsga3 import UNSGA3
-from pymoo.algorithms.moo.nsga3 import NSGA3
 from pymoo.algorithms.moo.nsga2 import NSGA2
-from pymoo.core.algorithm import Algorithm, default_termination
-
-
-from pymoo.util.ref_dirs import get_reference_directions
-
-from pymoo.core.mixed import  MixedVariableGA, MixedVariableMating, MixedVariableDuplicateElimination
-from pymoo.core.population import Population
-from pymoo.optimize import minimize
-from pymoo.core.problem import Problem
+from pymoo.algorithms.moo.nsga3 import NSGA3
+from pymoo.algorithms.moo.unsga3 import UNSGA3
 from pymoo.config import Config
+from pymoo.core.algorithm import Algorithm, default_termination
+from pymoo.core.mixed import MixedVariableDuplicateElimination, MixedVariableGA, MixedVariableMating
+from pymoo.core.population import Population
+from pymoo.core.problem import Problem
+from pymoo.optimize import minimize
 from pymoo.termination import get_termination
 from pymoo.termination.collection import TerminationCollection
+from pymoo.util.ref_dirs import get_reference_directions
+
+from banditry.variable_domains.design_space import DesignSpace
 
 Config.show_compile_hint = True
-
 
 
 def get_init_pop(
     space: DesignSpace,
     population_size: int,
-    initial_suggest: Optional[pd.DataFrame] = None,
-    selected_para_names: Optional[list[str]] = None,
+    initial_suggest: pd.DataFrame | None = None,
+    selected_para_names: list[str] | None = None,
 ) -> Population:
     active_para_names = list(space.para_names if selected_para_names is None else selected_para_names)
     unknown_names = [name for name in active_para_names if name not in space.para_names]
@@ -54,58 +50,60 @@ def get_init_pop(
             else:
                 pop_item[name] = item[i]
         pop_lst.append(pop_item)
-    pop = Population.new(X = pop_lst)
+    pop = Population.new(X=pop_lst)
     return pop
 
 
 class GAEnum(Enum):
     nsga3 = NSGA3
-    unsga3 = UNSGA3 # Different tournament mechanism (computes pressure potential rather than random)
+    unsga3 = UNSGA3  # Different tournament mechanism (computes pressure potential rather than random)
     msga = MixedVariableGA
     nsga2 = NSGA2
 
     @classmethod
     def compute_intense(cls):
         return [GAEnum.nsga3, GAEnum.unsga3]
-    
+
     def is_compute_intense(self):
         return self in self.compute_intense()
 
     @classmethod
-    def determine(cls, n_obj: int, compute_budget_high = True):
+    def determine(cls, n_obj: int, compute_budget_high=True):
         if n_obj <= 2:
             return cls.unsga3 if compute_budget_high else cls.msga
         else:
             return cls.nsga3 if compute_budget_high else cls.nsga2
-        
+
     def auto(self, n_dim=1, n_points=128, **kwargs) -> Algorithm:
         if self.is_compute_intense():
             ref_dir = get_reference_directions("energy", n_dim=n_dim, n_points=n_points)
-            # Repair for NSGA3 may not work properly, so we may need to move to value conditioning 
-            return self.value(ref_dirs=ref_dir, 
-                        mating=MixedVariableMating(eliminate_duplicates = MixedVariableDuplicateElimination()),
-                        eliminate_duplicates = MixedVariableDuplicateElimination(),
-                          **kwargs)
+            # Repair for NSGA3 may not work properly, so we may need to move to value conditioning
+            return self.value(
+                ref_dirs=ref_dir,
+                mating=MixedVariableMating(eliminate_duplicates=MixedVariableDuplicateElimination()),
+                eliminate_duplicates=MixedVariableDuplicateElimination(),
+                **kwargs,
+            )
         else:
-            return self.value(MixedVariableMating(eliminate_duplicates = MixedVariableDuplicateElimination()), 
-                        eliminate_duplicates = MixedVariableDuplicateElimination(),
-                        **kwargs)
+            return self.value(
+                MixedVariableMating(eliminate_duplicates=MixedVariableDuplicateElimination()),
+                eliminate_duplicates=MixedVariableDuplicateElimination(),
+                **kwargs,
+            )
+
 
 class EvolutionOpt:
-    def __init__(self,
-            design_space : DesignSpace,
-            **conf):
+    def __init__(self, design_space: DesignSpace, **conf):
         self.space = design_space
-        self.pop = conf.get('pop', 100)
-        self.max_iters = conf.get('max_iters', 500)
-        self.verbose = conf.get('verbose', False)
-        self.repair = conf.get('repair', None)
-        self.sobol_init = conf.get('sobol_init', True)
-
+        self.pop = conf.get("pop", 100)
+        self.max_iters = conf.get("max_iters", 500)
+        self.verbose = conf.get("verbose", False)
+        self.repair = conf.get("repair", None)
+        self.sobol_init = conf.get("sobol_init", True)
 
     def termnation_condition(self, problem: Problem):
         def_term = default_termination(problem)
-        max_iter_term = get_termination('n_gen', self.max_iters)
+        max_iter_term = get_termination("n_gen", self.max_iters)
         return TerminationCollection(def_term, max_iter_term)
 
     @staticmethod
@@ -165,7 +163,7 @@ class EvolutionOpt:
                 raise ValueError(f"Cannot reconstruct parameter '{name}' from optimiser output.")
         return df_out[self.space.para_names]
 
-    def _fixed_only_recommendation(self, fix_input: dict, initial_suggest: Optional[pd.DataFrame]) -> pd.DataFrame:
+    def _fixed_only_recommendation(self, fix_input: dict, initial_suggest: pd.DataFrame | None) -> pd.DataFrame:
         seed_row = None
         if initial_suggest is not None and not initial_suggest.empty:
             seed_row = initial_suggest.iloc[0]
@@ -184,10 +182,14 @@ class EvolutionOpt:
             raise ValueError(f"No free variables to optimise but missing fixed values for: {missing}")
         return pd.DataFrame([row], columns=self.space.para_names)
 
-
-    def optimise(self, problem: Problem, initial_suggest : pd.DataFrame = None,
-                 return_pop = False, method: GAEnum = None,
-                 seed: Optional[int] = None) -> pd.DataFrame:
+    def optimise(
+        self,
+        problem: Problem,
+        initial_suggest: pd.DataFrame = None,
+        return_pop=False,
+        method: GAEnum = None,
+        seed: int | None = None,
+    ) -> pd.DataFrame:
         fix_input = getattr(problem, "fix", None) or {}
 
         problem_vars = getattr(problem, "vars", None)
@@ -202,8 +204,9 @@ class EvolutionOpt:
         if method is None:
             method = GAEnum.determine(problem.n_obj, compute_budget_high=True)
 
-        algo = method.auto(n_dim=problem.n_obj, n_points=self.pop, pop_size = self.pop,
-                           repair = self.repair, sampling = init_pop)
+        algo = method.auto(
+            n_dim=problem.n_obj, n_points=self.pop, pop_size=self.pop, repair=self.repair, sampling=init_pop
+        )
 
         # pymoo.minimize(seed=None) draws from a non-deterministic source
         # rather than the globally-seeded numpy RNG, so reproducibility
@@ -213,13 +216,11 @@ class EvolutionOpt:
         if seed is None:
             seed = int(np.random.randint(0, 2**31 - 1))
 
-        res = minimize(problem, algo,
-                       termination=self.termnation_condition(problem),
-                       seed=seed,
-                       verbose = self.verbose)
+        res = minimize(problem, algo, termination=self.termnation_condition(problem), seed=seed, verbose=self.verbose)
 
         if res.X is None:
             import banditry.logging_utils as log
+
             log.debug("Optimisation terminated with no solutions found")
 
         if res.X is not None and not return_pop:
@@ -230,7 +231,6 @@ class EvolutionOpt:
                 candidates = [candidates[np.random.choice(len(candidates))]]
             candidates = sorted(candidates, key=lambda x: x.F[0])
             candidates = [c.X for c in candidates]
-            
-        
+
         self.res = res
         return self._decode_candidates(candidates, active_para_names, fix_input)

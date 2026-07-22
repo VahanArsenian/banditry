@@ -1,6 +1,6 @@
-"""Run a single agent against a benchmark.
+"""Run a single agent against a synthetic benchmark.
 
-    python main.py --agent ofugp-gp --benchmark branin --n-iter 30 --seed 42
+banditry-bench --agent ofugp-gp --benchmark branin --n-iter 30 --seed 42
 """
 
 import argparse
@@ -18,15 +18,15 @@ from banditry.variable_domains.design_space import DesignSpace
 def branin(df):
     x0 = df["x0"].to_numpy(dtype=float)
     x1 = df["x1"].to_numpy(dtype=float)
-    a, b, c = 1.0, 5.1 / (4 * np.pi ** 2), 5.0 / np.pi
+    a, b, c = 1.0, 5.1 / (4 * np.pi**2), 5.0 / np.pi
     r, s, t = 6.0, 10.0, 1.0 / (8 * np.pi)
-    return a * (x1 - b * x0 ** 2 + c * x0 - r) ** 2 + s * (1 - t) * np.cos(x0) + s - 2
+    return a * (x1 - b * x0**2 + c * x0 - r) ** 2 + s * (1 - t) * np.cos(x0) + s - 2
 
 
-def gaussian_valley(df, lengthscale=0.125 ** 0.25):
+def gaussian_valley(df, lengthscale=0.125**0.25):
     x0 = df["x0"].to_numpy(dtype=float)
     x1 = df["x1"].to_numpy(dtype=float)
-    return -((x0 - x1) ** 2) * np.exp(-(x0 ** 2 + x1 ** 2) / (2 * lengthscale ** 2))
+    return -((x0 - x1) ** 2) * np.exp(-(x0**2 + x1**2) / (2 * lengthscale**2))
 
 
 BRANIN_SPACE = [
@@ -47,15 +47,17 @@ BENCHMARKS = {
     "contextual_gaussian_valley": (gaussian_valley, VALLEY_SPACE, ["x1"]),
 }
 
-parser = argparse.ArgumentParser(description="Run a single agent against a benchmark.")
-parser.add_argument("--agent", choices=["ofugp-gp", "ofugp-svgp", "ts-nuts", "ts-langevin"], default="ofugp-gp")
-parser.add_argument("--benchmark", choices=sorted(BENCHMARKS), default="gaussian_valley")
-parser.add_argument("--n-iter", type=int, default=30)
-parser.add_argument("--seed", type=int, default=42)
-parser.add_argument("--rand-sample", type=int, default=4)
-parser.add_argument("--noise-std-proxy", type=float, default=1.0, help="OFUGP agents only")
-parser.add_argument("--verbose", action="store_true")
-args = parser.parse_args()
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run a single agent against a benchmark.")
+    parser.add_argument("--agent", choices=["ofugp-gp", "ofugp-svgp", "ts-nuts", "ts-langevin"], default="ofugp-gp")
+    parser.add_argument("--benchmark", choices=sorted(BENCHMARKS), default="gaussian_valley")
+    parser.add_argument("--n-iter", type=int, default=30)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--rand-sample", type=int, default=4)
+    parser.add_argument("--noise-std-proxy", type=float, default=1.0, help="OFUGP agents only")
+    parser.add_argument("--verbose", action="store_true")
+    return parser
 
 
 def seed_everything(seed: int) -> None:
@@ -66,22 +68,22 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def make_agent(space: DesignSpace):
-    kind, variant = args.agent.split("-")
+def make_agent(name: str, space: DesignSpace, rand_sample: int, noise_std_proxy: float):
+    kind, variant = name.split("-")
     if kind == "ofugp":
-        config = OFUGPConfig(rand_sample=args.rand_sample, surrogate=variant, noise_std_proxy=args.noise_std_proxy)
+        config = OFUGPConfig(rand_sample=rand_sample, surrogate=variant, noise_std_proxy=noise_std_proxy)
     else:
-        config = TSConfig(rand_sample=args.rand_sample, sampler=variant)
+        config = TSConfig(rand_sample=rand_sample, sampler=variant)
     return build_agent(config, space)
 
 
-def run() -> None:
+def run(args: argparse.Namespace) -> float:
     log.set_verbose(args.verbose)
     seed_everything(args.seed)
 
     fn, spec, context_names = BENCHMARKS[args.benchmark]
     space = DesignSpace.parse(spec)
-    agent = make_agent(space)
+    agent = make_agent(args.agent, space, args.rand_sample, args.noise_std_proxy)
     log.console.print(
         f"▶ {agent.display_name} on {args.benchmark} (n_iter={args.n_iter}, seed={args.seed})",
         style="bold green",
@@ -105,7 +107,12 @@ def run() -> None:
         )
 
     log.console.print(f"✓ done  best_y={best_y:.4f}  t={time.time() - start:.1f}s", style="bold green")
+    return best_y
+
+
+def main(argv=None) -> None:
+    run(build_parser().parse_args(argv))
 
 
 if __name__ == "__main__":
-    run()
+    main()

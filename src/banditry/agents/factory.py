@@ -1,8 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Optional
 
 from banditry.agents.agent import AbstractAgent
-from banditry.agents.ofugpagent import OFUGPAgent, ModelEnum
+from banditry.agents.ofugpagent import ModelEnum, OFUGPAgent
 from banditry.agents.tsagent import TSAgent
 from banditry.sampling_oracles.langevin_sampler import LangevinSampler, welling_teh_schedule
 from banditry.sampling_oracles.sampler import FeelGoodNLL
@@ -16,23 +15,23 @@ class AgentConfig:
 
 @dataclass
 class OFUGPConfig(AgentConfig):
-    surrogate: str = "svgp"                              # "gp" | "svgp"
+    surrogate: str = "svgp"  # "gp" | "svgp"
     frequentist: bool = False
-    rkhs_norm: Optional[float] = None                    # B in Chowdhury-Gopalan β_t
-    noise_std_proxy: Optional[float] = None              # R in Chowdhury-Gopalan β_t (sub-Gaussian noise scale)
+    rkhs_norm: float | None = None  # B in Chowdhury-Gopalan β_t
+    noise_std_proxy: float | None = None  # R in Chowdhury-Gopalan β_t (sub-Gaussian noise scale)
     model_config_overrides: dict = field(default_factory=dict)
 
 
 @dataclass
 class TSConfig(AgentConfig):
-    sampler: str = "nuts"                                # "langevin" | "nuts"
+    sampler: str = "nuts"  # "langevin" | "nuts"
     feel_good: bool = False
     fg_lambda: float = 1.0
     fg_bound: float = 1.0
     model_config: dict = field(default_factory=dict)
-    sampler_config: Optional[dict] = None                # None -> per-sampler default below
+    sampler_config: dict | None = None  # None -> per-sampler default below
     should_warm_start: bool = True
-    latent_dimension: Optional[float] = None             # None -> TSAgent.num_samplable_params() at build time
+    latent_dimension: float | None = None  # None -> TSAgent.num_samplable_params() at build time
 
 
 DEFAULT_NUTS_CONFIG: dict = {
@@ -75,6 +74,7 @@ def build_agent(config: AgentConfig, space: DesignSpace) -> AbstractAgent:
         nll = FeelGoodNLL(fg_lambda=config.fg_lambda, fg_bound=config.fg_bound) if config.feel_good else None
         if config.sampler == "nuts":
             from banditry.sampling_oracles.nuts_sampler import NUTSSampler
+
             sampler_cls = NUTSSampler
             sampler_config = config.sampler_config if config.sampler_config is not None else DEFAULT_NUTS_CONFIG
         elif config.sampler == "langevin":
@@ -93,4 +93,3 @@ def build_agent(config: AgentConfig, space: DesignSpace) -> AbstractAgent:
             latent_dimension=config.latent_dimension,
         )
     raise TypeError(f"Unknown config type: {type(config).__name__}")
-

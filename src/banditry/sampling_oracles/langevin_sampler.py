@@ -1,6 +1,6 @@
+import math
 from collections.abc import Callable
 from copy import deepcopy
-import math
 
 import torch
 import torch.nn as nn
@@ -12,8 +12,10 @@ from banditry.sampling_oracles.sampler import Sampler, _gaussian_nll
 from banditry.surrogates.tsmodel import ValueFunction
 
 
-def welling_teh_schedule(a: float, b: float = 1.0, gamma: float = 0.55, lr_floor: float = 1e-5) -> Callable[[int], float]:
-    #Polynomial step-size schedule from Welling & Teh (2011).
+def welling_teh_schedule(
+    a: float, b: float = 1.0, gamma: float = 0.55, lr_floor: float = 1e-5
+) -> Callable[[int], float]:
+    # Polynomial step-size schedule from Welling & Teh (2011).
 
     if a <= 0:
         raise ValueError(f"a must be positive, got {a}")
@@ -36,7 +38,7 @@ class LangevinSampler(Sampler):
 
     def __init__(
         self,
-        step_size: float | Callable[[int], float] = welling_teh_schedule(a=1e-3),
+        step_size: float | Callable[[int], float] = welling_teh_schedule(a=1e-3),  # noqa: B008 — deterministic closure
         prior_precision: float = 1e-4,
         temperature: float = 1.0,
         precondition: bool = False,
@@ -56,8 +58,10 @@ class LangevinSampler(Sampler):
             self._step_size_fn: Callable[[int], float] = step_size
         else:
             _c = float(step_size)
+
             def _f(*args, **kwargs):
                 return _c
+
             self._step_size_fn = _f
         self.prior_precision = float(prior_precision)
         self.temperature = float(temperature)
@@ -118,8 +122,9 @@ class LangevinSampler(Sampler):
         )
         burn_in_updates = self.burn_in * updates_per_epoch
         import banditry.logging_utils as log
+
         log.debug(f"Learning rate after burn in: {self._step_size_fn(burn_in_updates, n_burn_in=burn_in_updates)}")
-        
+
         model_params = [p for p in working_model.parameters() if p.requires_grad]
 
         log_obs_noise = nn.Parameter(
@@ -153,9 +158,7 @@ class LangevinSampler(Sampler):
 
                 pred = working_model.forward(bxc, bxe, _pre_scaled=True)
 
-                obs_noise = torch.exp(log_obs_noise).clamp(
-                    min=self.min_obs_noise, max=self.max_obs_noise
-                ).view(1, -1)
+                obs_noise = torch.exp(log_obs_noise).clamp(min=self.min_obs_noise, max=self.max_obs_noise).view(1, -1)
 
                 nll_value = nll_fn(
                     pred,
@@ -182,9 +185,7 @@ class LangevinSampler(Sampler):
                 optimizer.step(noise=True)
 
                 with torch.no_grad():
-                    log_obs_noise.clamp_(
-                        math.log(self.min_obs_noise), math.log(self.max_obs_noise)
-                    )
+                    log_obs_noise.clamp_(math.log(self.min_obs_noise), math.log(self.max_obs_noise))
                 updates += 1
 
             if updates >= burn_in_updates:
@@ -196,11 +197,10 @@ class LangevinSampler(Sampler):
                     if self._draw_sample_id(post_burn_seen) == 0:
                         selected_state = deepcopy(working_model.state_dict())
 
-
         sampled_model = working_model
         if selected_state is not None:
             sampled_model.load_state_dict(selected_state, strict=True)
-     
+
         sampled_model.set_y_scaler(yscaler)
         sampled_model.eval()
         return sampled_model

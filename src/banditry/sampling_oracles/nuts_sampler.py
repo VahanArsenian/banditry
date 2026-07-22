@@ -1,17 +1,17 @@
+import math
 from collections.abc import Callable
 from copy import deepcopy
-import math
 
+import pyro
+import pyro.distributions as dist
 import torch
+from pyro.infer import MCMC, NUTS
+from pyro.infer.autoguide.initialization import init_to_value
 from torch import FloatTensor, LongTensor
 from torch.func import functional_call
 
 from banditry.sampling_oracles.sampler import Sampler, _gaussian_nll
 from banditry.surrogates.tsmodel import ValueFunction
-import pyro
-import pyro.distributions as dist
-from pyro.infer import MCMC, NUTS
-from pyro.infer.autoguide.initialization import init_to_value
 
 
 class NUTSSampler(Sampler):
@@ -67,9 +67,7 @@ class NUTSSampler(Sampler):
         return math.log(p) - math.log1p(-p)
 
     def _raw_to_noise(self, raw_noise: torch.Tensor) -> torch.Tensor:
-        return self.min_obs_noise + (
-            self.max_obs_noise - self.min_obs_noise
-        ) * torch.sigmoid(raw_noise)
+        return self.min_obs_noise + (self.max_obs_noise - self.min_obs_noise) * torch.sigmoid(raw_noise)
 
     def _raw_noise_prior_loc(self) -> float:
         prior_log_noise = min(
