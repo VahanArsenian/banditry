@@ -65,8 +65,8 @@ pip install "banditry[nuts]"
 From source, for development:
 
 ```bash
-git clone https://github.com/VahanArsenian/pyBandits.git
-cd pyBandits
+git clone https://github.com/VahanArsenian/banditry.git
+cd banditry
 pip install -e ".[nuts]"
 ```
 
@@ -226,7 +226,7 @@ If you use `banditry` in your research, please cite:
   author  = {Arsenyan, Vahan},
   title   = {banditry: contextual bandit agents with Gaussian-process surrogates},
   year    = {2026},
-  url     = {https://github.com/VahanArsenian/pyBandits},
+  url     = {https://github.com/VahanArsenian/banditry},
   version = {0.1.0}
 }
 ```

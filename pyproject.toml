@@ -46,8 +46,8 @@ dependencies = [
 nuts = ["pyro-ppl>=1.8,<2"]
 
 [project.urls]
-Repository = "https://github.com/VahanArsenian/pyBandits"
-Issues = "https://github.com/VahanArsenian/pyBandits/issues"
+Repository = "https://github.com/VahanArsenian/banditry"
+Issues = "https://github.com/VahanArsenian/banditry/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
