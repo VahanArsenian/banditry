@@ -9,6 +9,26 @@ from banditry.variable_domains.design_space import DesignSpace
 
 
 class ContextualProblem(Problem):
+    """pymoo ``Problem`` that optimises an acquisition's free variables under a fixed context.
+
+    Wraps an :class:`~banditry.optimisation_subroutines.objectives.Objective` as a
+    mixed-variable pymoo problem. Variables named in ``fix`` are pinned: their raw values
+    are transformed once into the optimiser's internal space and broadcast into every
+    candidate at evaluation time, while only the remaining (free) variables are exposed to
+    the optimiser. The per-variable dict handed to pymoo is built by taking
+    ``DesignSpace.to_pymoo_vars()`` — ``Real``/``Integer`` variables bounded by the space's
+    transformed ``opt_lb``/``opt_ub`` and ``Choice`` variables enumerating category codes —
+    and restricting it to the free names, so bounds and variable types always match the
+    space's transform. Objective and constraint counts come from ``objective.num_obj`` and
+    ``objective.num_constr``.
+
+    Args:
+        objective: Acquisition to minimise; also determines ``n_obj`` and ``n_constr``.
+        space: Design space defining all variables and their transforms.
+        fix: Mapping of context-variable names to raw (untransformed) values to hold
+            fixed; ``None`` or empty means every variable is optimised.
+    """
+
     def __init__(self, objective: Objective, space: DesignSpace, fix: dict = None):
         self.objective = objective
         self.space = space
@@ -34,6 +54,7 @@ class ContextualProblem(Problem):
 
     @staticmethod
     def _as_candidate_list(para: np.ndarray) -> list[dict]:
+        """Normalise pymoo's candidate batch (dict, object array, or sequence) to a list of dicts."""
         if isinstance(para, dict):
             return [para]
         if isinstance(para, np.ndarray):
@@ -41,6 +62,11 @@ class ContextualProblem(Problem):
         return list(para)
 
     def _evaluate(self, para: np.ndarray, out: dict, *args, **kwargs):
+        """Assemble full feature tensors (fixed plus free columns) and evaluate the objective.
+
+        Fills ``out["F"]`` with the first ``num_obj`` columns of the objective output and
+        ``out["G"]`` with the remaining constraint columns.
+        """
         candidates = self._as_candidate_list(para)
         num_x = len(candidates)
         x_cols = []

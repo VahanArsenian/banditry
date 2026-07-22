@@ -15,6 +15,27 @@ from banditry.surrogates.tsmodel import ValueFunction
 def welling_teh_schedule(
     a: float, b: float = 1.0, gamma: float = 0.55, lr_floor: float = 1e-5
 ) -> Callable[[int], float]:
+    """Build the polynomial step-size schedule of Welling & Teh (2011).
+
+    Implements the decaying schedule from Welling & Teh (2011), "Bayesian Learning via
+    Stochastic Gradient Langevin Dynamics": ``eps_t = a * (b + t) ** (-gamma)`` during
+    burn-in. After burn-in the rate is frozen at its final burn-in value and clamped from
+    below by ``lr_floor``, i.e. ``max(a * (b + n_burn_in) ** (-gamma), lr_floor)``.
+
+    Args:
+        a: Initial scale of the schedule; must be positive.
+        b: Offset delaying the start of the decay; must be non-negative.
+        gamma: Decay exponent; must lie in ``(0.5, 1]`` for the SGLD convergence
+            conditions of Welling & Teh to hold.
+        lr_floor: Lower bound applied to the post-burn-in learning rate.
+
+    Returns:
+        A callable ``(t, n_burn_in) -> lr`` mapping the update step ``t`` (given the total
+        number of burn-in updates ``n_burn_in``) to a learning rate.
+
+    Raises:
+        ValueError: If ``a <= 0``, ``b < 0``, or ``gamma`` is outside ``(0.5, 1]``.
+    """
     # Polynomial step-size schedule from Welling & Teh (2011).
 
     if a <= 0:
@@ -34,7 +55,46 @@ def welling_teh_schedule(
 
 
 class LangevinSampler(Sampler):
-    """Sample TS model weights from an approximate posterior using SGLD."""
+    """Sample TS model weights from an approximate posterior using SGLD.
+
+    Runs stochastic gradient Langevin dynamics (Welling & Teh, 2011) on a deep copy of the
+    model: minibatch gradient steps on the negative log posterior with Gaussian noise
+    injected by the :class:`~banditry.optimisation_oracles.sgld.SGLD` optimizer. The
+    observation-noise standard deviation is learned jointly as a per-output parameter
+    (excluded from the weight prior). The total number of updates is the maximum of
+    ``num_epochs`` epochs, ``min_batches`` updates, and ``burn_in + 1`` epochs, so at least
+    one post-burn-in epoch always runs; one post-burn-in state is kept via streaming
+    uniform (reservoir) selection and returned as the posterior draw.
+
+    The constructor keyword arguments below are exactly the valid keys of
+    ``TSConfig.sampler_config`` when ``sampler="langevin"``.
+
+    Args:
+        step_size: Learning-rate schedule: either a constant ``float`` or a callable
+            ``(t, n_burn_in) -> lr`` such as the one returned by
+            :func:`welling_teh_schedule` (the default).
+        prior_precision: Precision of the isotropic zero-mean Gaussian prior over model
+            weights, applied as weight decay on the gradients.
+        temperature: Scales the variance of the injected Langevin noise; ``1.0`` targets
+            the true posterior, smaller values sharpen it, and ``0`` reduces the update to
+            plain SGD.
+        precondition: If ``True``, use RMSProp-style diagonal preconditioning (pSGLD):
+            gradient step and noise are rescaled by an EMA of squared gradients.
+        precond_alpha: EMA decay rate of the squared-gradient accumulator used by the
+            preconditioner.
+        precond_eps: Numerical-stability constant added to the preconditioner denominator.
+        batch_size: Minibatch size (capped at the dataset size).
+        min_batches: Minimum total number of gradient updates to perform.
+        num_epochs: Target number of passes over the data.
+        burn_in: Number of initial epochs discarded before model states become eligible
+            for selection as the returned sample.
+        init_obs_noise: Initial observation-noise standard deviation (in standardised-y
+            units).
+        min_obs_noise: Lower clamp for the learned observation noise.
+        max_obs_noise: Upper clamp for the learned observation noise.
+        generator: Optional ``torch.Generator`` making noise injection and sample
+            selection reproducible.
+    """
 
     def __init__(
         self,
@@ -85,6 +145,25 @@ class LangevinSampler(Sampler):
         y: FloatTensor,
         nll: Callable[..., FloatTensor] | None = None,
     ) -> ValueFunction:
+        """Draw one posterior weight sample via SGLD.
+
+        Standardises ``y`` (and fits the model's x-scaler), then runs SGLD on a deep copy
+        of ``model`` for the configured number of updates, keeping one post-burn-in state
+        chosen uniformly at random as the posterior draw.
+
+        Args:
+            model: Template ``ValueFunction``; left unmodified.
+            Xc: Continuous features of shape ``(n, model.num_cont)``, or ``None``.
+            Xe: Categorical features of shape ``(n, model.num_enum)``, or ``None``.
+            y: Observed targets of shape ``(n, model.num_out)``.
+            nll: Optional NLL callable ``(pred, target, obs_std, **kwargs)``; it may
+                return per-element values (reduced internally to a dataset total) or a
+                scalar total loss. Defaults to the Gaussian NLL.
+
+        Returns:
+            A new ``ValueFunction`` in eval mode carrying the sampled weights and the
+            fitted y-scaler.
+        """
 
         nll_fn = _gaussian_nll if nll is None else nll
 

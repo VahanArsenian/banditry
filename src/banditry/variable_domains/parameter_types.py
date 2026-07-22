@@ -5,6 +5,25 @@ import pandas as pd
 
 
 class Parameter(ABC):
+    """Abstract base class for a single design-space parameter.
+
+    A parameter converts values between two representations:
+
+    - the *raw* domain, as produced by :meth:`sample` and seen by the user
+      (floats, ints, bools, category labels), and
+    - the *transformed / optimiser* domain, a numeric encoding bounded by
+      :attr:`opt_lb` and :attr:`opt_ub` that surrogate models and acquisition
+      optimisers operate on.
+
+    Subclasses implement :meth:`sample`, :meth:`transform` (raw to transformed) and
+    :meth:`inverse_transform` (transformed back to raw), plus the ``is_numeric``,
+    ``is_discrete`` and ``is_discrete_after_transform`` flags that determine how the
+    optimiser treats the parameter. ``is_categorical`` is simply ``not is_numeric``.
+
+    Args:
+        param_dict: Spec dict for this parameter; must contain at least ``"name"``.
+    """
+
     def __init__(self, param_dict):
         self.param_dict = param_dict
         self.name = param_dict["name"]
@@ -53,6 +72,13 @@ class Parameter(ABC):
 
 
 class NumericParameter(Parameter):
+    """Continuous parameter on ``[lb, ub]`` (spec type ``"num"``).
+
+    Reads the spec keys ``"name"``, ``"lb"`` and ``"ub"``. The transform is the
+    identity, so the optimiser domain equals the raw domain with bounds
+    ``opt_lb = lb`` and ``opt_ub = ub``. Sampling is uniform on ``[lb, ub)``.
+    """
+
     def __init__(self, param_dict):
         super().__init__(param_dict)
         self.lb = param_dict["lb"]
@@ -90,6 +116,15 @@ class NumericParameter(Parameter):
 
 
 class CategoricalParameter(Parameter):
+    """Categorical parameter over a fixed set of choices (spec type ``"cat"``).
+
+    Reads the spec keys ``"name"`` and ``"categories"``. ``transform`` maps each
+    category label to its (float) index in ``categories``; ``inverse_transform``
+    rounds to the nearest index and returns the corresponding label. Optimiser
+    bounds are ``[0, len(categories) - 1]`` and sampling is uniform over the
+    categories.
+    """
+
     def __init__(self, param):
         super().__init__(param)
         self.categories = list(param["categories"])
@@ -140,6 +175,13 @@ class CategoricalParameter(Parameter):
 
 
 class BoolParameter(Parameter):
+    """Boolean parameter (spec type ``"bool"``).
+
+    Reads only the spec key ``"name"``. ``transform`` casts to float (0.0/1.0);
+    ``inverse_transform`` thresholds at 0.5 (``x > 0.5``), so any optimiser value in
+    ``[0, 1]`` maps back to a bool. Sampling is a fair coin flip.
+    """
+
     def __init__(self, param):
         super().__init__(param)
         self.lb = 0
@@ -177,6 +219,13 @@ class BoolParameter(Parameter):
 
 
 class IntParameter(Parameter):
+    """Integer parameter on the inclusive range ``[lb, ub]`` (spec type ``"int"``).
+
+    Reads the spec keys ``"name"``, ``"lb"`` and ``"ub"`` (rounded to the nearest
+    integer). ``transform`` casts to float; ``inverse_transform`` rounds back to the
+    nearest integer. Sampling is uniform over the integers in ``[lb, ub]``.
+    """
+
     def __init__(self, param_dict):
         super().__init__(param_dict)
         self.lb = round(param_dict["lb"])

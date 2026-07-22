@@ -26,6 +26,29 @@ def get_init_pop(
     initial_suggest: pd.DataFrame | None = None,
     selected_para_names: list[str] | None = None,
 ) -> Population:
+    """Build an initial pymoo ``Population`` in the optimiser's transformed space.
+
+    Samples ``population_size`` points from the design space, optionally placing rows from
+    ``initial_suggest`` at the head of the population (e.g. to warm-start from the
+    incumbent), transforms everything into the numeric optimiser space, and keeps only the
+    requested variables.
+
+    Args:
+        space: Design space to sample from and transform with.
+        population_size: Number of individuals in the returned population.
+        initial_suggest: Optional raw-space DataFrame whose rows are prepended before the
+            population is truncated to ``population_size``.
+        selected_para_names: Names of the variables to keep in each individual (defaults
+            to all of ``space.para_names``); used when context variables are fixed and
+            excluded from optimisation.
+
+    Returns:
+        A pymoo ``Population`` of dict-encoded individuals, with enum variables stored as
+        ``int`` and numeric variables as ``float``.
+
+    Raises:
+        ValueError: If ``selected_para_names`` contains names unknown to ``space``.
+    """
     active_para_names = list(space.para_names if selected_para_names is None else selected_para_names)
     unknown_names = [name for name in active_para_names if name not in space.para_names]
     if unknown_names:
@@ -55,6 +78,16 @@ def get_init_pop(
 
 
 class GAEnum(Enum):
+    """Registry of the pymoo genetic algorithms :class:`EvolutionOpt` can dispatch to.
+
+    Members map to pymoo algorithm classes: ``nsga3`` (NSGA-III), ``unsga3`` (U-NSGA-III,
+    NSGA-III with a pressure-based rather than random tournament), ``msga`` (pymoo's
+    mixed-variable GA) and ``nsga2`` (NSGA-II). :meth:`determine` picks a member from the
+    objective count and compute budget; :meth:`auto` instantiates the chosen algorithm with
+    mixed-variable mating and duplicate elimination, adding energy-based reference
+    directions for the reference-direction ("compute intense") members.
+    """
+
     nsga3 = NSGA3
     unsga3 = UNSGA3  # Different tournament mechanism (computes pressure potential rather than random)
     msga = MixedVariableGA
@@ -62,19 +95,35 @@ class GAEnum(Enum):
 
     @classmethod
     def compute_intense(cls):
+        """Members requiring reference directions, which are costly to generate."""
         return [GAEnum.nsga3, GAEnum.unsga3]
 
     def is_compute_intense(self):
+        """Whether this member needs reference directions (see :meth:`compute_intense`)."""
         return self in self.compute_intense()
 
     @classmethod
     def determine(cls, n_obj: int, compute_budget_high=True):
+        """Select an algorithm: U-NSGA-III (<= 2 objectives) or NSGA-III (> 2) on a high
+        compute budget, otherwise the mixed-variable GA or NSGA-II respectively."""
         if n_obj <= 2:
             return cls.unsga3 if compute_budget_high else cls.msga
         else:
             return cls.nsga3 if compute_budget_high else cls.nsga2
 
     def auto(self, n_dim=1, n_points=128, **kwargs) -> Algorithm:
+        """Instantiate the algorithm with mixed-variable mating and duplicate elimination.
+
+        Args:
+            n_dim: Number of objectives; sets the dimensionality of the energy-based
+                reference directions for the compute-intense members.
+            n_points: Number of reference directions to generate.
+            **kwargs: Forwarded to the pymoo algorithm constructor (e.g. ``pop_size``,
+                ``repair``, ``sampling``).
+
+        Returns:
+            A configured pymoo ``Algorithm`` instance.
+        """
         if self.is_compute_intense():
             ref_dir = get_reference_directions("energy", n_dim=n_dim, n_points=n_points)
             # Repair for NSGA3 may not work properly, so we may need to move to value conditioning
@@ -93,6 +142,23 @@ class GAEnum(Enum):
 
 
 class EvolutionOpt:
+    """Evolutionary acquisition optimiser wrapping pymoo's mixed-variable GAs.
+
+    Minimises an acquisition ``Problem`` (typically a ``ContextualProblem``) over the
+    design space with a genetic algorithm chosen via :class:`GAEnum`: unless a method is
+    passed explicitly, ``GAEnum.determine(problem.n_obj, compute_budget_high=True)`` picks
+    U-NSGA-III for one or two objectives and NSGA-III for three or more. All algorithms run
+    with mixed-variable mating and duplicate elimination, so continuous, integer and
+    categorical variables are handled natively.
+
+    Args:
+        design_space: The search space to optimise over.
+        **conf: Optional settings — ``pop`` (population size, default 100), ``max_iters``
+            (generation cap, default 500), ``verbose`` (pymoo verbosity, default False),
+            ``repair`` (optional pymoo repair operator, default None) and ``sobol_init``
+            (default True; stored but currently unused).
+    """
+
     def __init__(self, design_space: DesignSpace, **conf):
         self.space = design_space
         self.pop = conf.get("pop", 100)
@@ -102,12 +168,14 @@ class EvolutionOpt:
         self.sobol_init = conf.get("sobol_init", True)
 
     def termnation_condition(self, problem: Problem):
+        """Combine pymoo's default termination with an ``n_gen`` cap of ``max_iters``."""
         def_term = default_termination(problem)
         max_iter_term = get_termination("n_gen", self.max_iters)
         return TerminationCollection(def_term, max_iter_term)
 
     @staticmethod
     def _as_candidate_list(candidates) -> list:
+        """Normalise pymoo's ``res.X`` output (dict, ndarray, or sequence) to a list."""
         if candidates is None:
             return []
         if isinstance(candidates, dict):
@@ -125,6 +193,7 @@ class EvolutionOpt:
 
     @staticmethod
     def _candidate_frame(candidates: list, active_para_names: list[str]) -> pd.DataFrame:
+        """Arrange candidate dicts/arrays into a DataFrame with the active variable columns."""
         if len(candidates) == 0:
             return pd.DataFrame(columns=active_para_names)
 
@@ -148,6 +217,7 @@ class EvolutionOpt:
         active_para_names: list[str],
         fix_input: dict,
     ) -> pd.DataFrame:
+        """Inverse-transform optimiser candidates to raw values and re-attach fixed columns."""
         df_candidates = self._candidate_frame(candidates, active_para_names)
         n_rows = df_candidates.shape[0]
         df_out = pd.DataFrame(index=range(n_rows), columns=self.space.para_names)
@@ -164,6 +234,7 @@ class EvolutionOpt:
         return df_out[self.space.para_names]
 
     def _fixed_only_recommendation(self, fix_input: dict, initial_suggest: pd.DataFrame | None) -> pd.DataFrame:
+        """Build the single recommendation when every variable is fixed (nothing to optimise)."""
         seed_row = None
         if initial_suggest is not None and not initial_suggest.empty:
             seed_row = initial_suggest.iloc[0]
@@ -190,6 +261,31 @@ class EvolutionOpt:
         method: GAEnum = None,
         seed: int | None = None,
     ) -> pd.DataFrame:
+        """Run the evolutionary search and decode the results to raw design-space values.
+
+        Reads the fixed context values (``problem.fix``) and free variables
+        (``problem.vars``) off the problem; when every variable is fixed the fixed values
+        are returned directly without running the GA. Otherwise an initial population is
+        built via :func:`get_init_pop`, the algorithm selected by ``method`` (or
+        :meth:`GAEnum.determine`) is run under the combined default/``n_gen`` termination,
+        and the resulting candidates are inverse-transformed back to raw parameter values
+        with fixed context columns re-attached.
+
+        Args:
+            problem: pymoo ``Problem`` to minimise; typically a ``ContextualProblem``.
+            initial_suggest: Optional raw-space DataFrame used to seed the initial
+                population (and to fill free values when everything is fixed).
+            return_pop: If ``True``, return the whole final population (sorted by the
+                first objective) instead of the optimiser's solution set.
+            method: Explicit :class:`GAEnum` member overriding the automatic selection.
+            seed: Seed passed to ``pymoo.minimize``; when ``None`` one is drawn from the
+                globally seeded numpy RNG so the run stays reproducible.
+
+        Returns:
+            DataFrame of recommended configurations in raw design-space values, one row
+            per candidate, with columns ordered as ``space.para_names``. The raw pymoo
+            result is stored on ``self.res``.
+        """
         fix_input = getattr(problem, "fix", None) or {}
 
         problem_vars = getattr(problem, "vars", None)

@@ -4,6 +4,12 @@ import torch.nn.functional as F
 
 
 class EmbeddingTransform(nn.Module):
+    """Maps categorical index columns to concatenated dense embedding vectors (one ``nn.Embedding`` per column).
+
+    Embedding sizes default to ``min(50, 1 + cardinality // 2)`` per column unless ``emb_sizes`` is given.
+    Used by :class:`DummyFeatureExtractor` to featurise the categorical block for the surrogates.
+    """
+
     def __init__(self, num_uniqs, **conf):
         super().__init__()
         self.emb_sizes = conf.get("emb_sizes")
@@ -27,6 +33,11 @@ class EmbeddingTransform(nn.Module):
 
 
 class OneHotTransform(nn.Module):
+    """Maps categorical index columns to a concatenated one-hot float encoding.
+
+    Parameter-free alternative to :class:`EmbeddingTransform` for featurising categorical inputs.
+    """
+
     def __init__(self, num_uniqs):
         super().__init__()
         self.num_uniqs = num_uniqs
@@ -44,6 +55,11 @@ class OneHotTransform(nn.Module):
 
 
 class TorchIdentityScaler(nn.Module):
+    """No-op scaler exposing the ``fit``/``transform``/``inverse_transform`` interface.
+
+    Drop-in stand-in for the other scalers when no scaling is wanted.
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -61,6 +77,11 @@ class TorchIdentityScaler(nn.Module):
 
 
 class TorchStandardScaler(nn.Module):
+    """Per-column standardisation to zero mean / unit variance, ignoring non-finite entries.
+
+    Used to standardise the targets ``y`` in the GP/SVGP surrogates and in ``ValueFunction``.
+    """
+
     def __init__(self):
         super().__init__()
         self.mean = None
@@ -111,6 +132,11 @@ class TorchStandardScaler(nn.Module):
 
 
 class TorchMinMaxScaler(nn.Module):
+    """Per-column affine rescaling of finite entries into a fixed range (default ``(0, 1)``).
+
+    Used with range ``(-1, 1)`` to scale the continuous inputs ``Xc`` in the surrogates.
+    """
+
     def __init__(self, range: tuple = (0, 1)):
         super().__init__()
         self.range_lb = float(range[0])
@@ -168,6 +194,12 @@ class TorchMinMaxScaler(nn.Module):
 
 
 class DummyFeatureExtractor(nn.Module):
+    """Default surrogate feature extractor: concatenates continuous inputs with embedded categorical inputs.
+
+    Maps ``(x, xe)`` to a single float feature matrix of width ``total_dim`` using
+    :class:`EmbeddingTransform` for the categorical block (when ``num_enum > 0``).
+    """
+
     def __init__(self, num_cont, num_enum, num_uniqs=None, emb_sizes=None):
         super().__init__()
         self.num_cont = num_cont

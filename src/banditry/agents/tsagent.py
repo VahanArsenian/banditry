@@ -1,3 +1,5 @@
+"""Thompson-sampling agent backed by a neural value function and MCMC posterior sampling."""
+
 import numpy as np
 
 import banditry.logging_utils as log
@@ -12,6 +14,40 @@ from banditry.variable_domains.design_space import DesignSpace
 
 
 class TSAgent(AbstractAgent):
+    """Thompson-sampling agent with a neural value function.
+
+    Each round, the weights of a neural ``ValueFunction`` are sampled from
+    their posterior by an MCMC sampling oracle (`LangevinSampler` / SGLD, or
+    ``NUTSSampler`` / Pyro NUTS), and the sampled network is minimised over
+    the design space with an evolutionary optimiser (context parameters pinned
+    via ``fix_input``) — i.e. the agent plays the argmin of one posterior draw.
+
+    Optional Feel-Good Thompson sampling (Zhang, 2021, "Feel-Good Thompson
+    Sampling for Contextual Bandits and Reinforcement Learning") reweights the
+    likelihood with an exploration-boosting term; enable it by passing
+    ``nll=FeelGoodNLL(...)``.
+
+    Args:
+        space: The design space to optimise over.
+        rand_sample: Sobol warmup budget; see `AbstractAgent`.
+        model_config: Keyword arguments for the ``ValueFunction`` surrogate
+            (e.g. ``num_uniqs``, ``emb_sizes``, a custom feature extractor
+            ``fe``). ``num_uniqs`` is filled in automatically for spaces with
+            categorical parameters.
+        sampler_cls: Sampling-oracle class (default: `LangevinSampler`).
+        sampler_config: Keyword arguments splatted into ``sampler_cls``;
+            ``None`` uses the sampler's own constructor defaults.
+        nll: Optional `NLL` factory replacing the plain Gaussian likelihood,
+            e.g. ``FeelGoodNLL`` for Feel-Good Thompson sampling. It is bound
+            to the current context and observation history on every `suggest`.
+        should_warm_start: If ``True``, reuse the previous round's sampled
+            model as the MCMC initialisation of the next round (default
+            ``False`` here; the factory ``TSConfig`` enables it).
+        latent_dimension: Latent dimension of the sampled parameter vector,
+            recorded for labelling/diagnostics; ``None`` resolves to
+            `num_samplable_params`.
+    """
+
     support_parallel_opt = True
     support_combinatorial = True
     support_contextual = True
@@ -45,6 +81,21 @@ class TSAgent(AbstractAgent):
         return cfg
 
     def get_model(self, Xc, Xe, y, nll=None) -> ValueFunction:
+        """Draw one posterior sample of the value function.
+
+        Starts from the previous round's sampled model when warm-starting is
+        enabled (and available), otherwise from a freshly initialised
+        ``ValueFunction``, and runs the sampling oracle on the data.
+
+        Args:
+            Xc: Transformed numeric features.
+            Xe: Transformed categorical features.
+            y: Observed values as a float tensor.
+            nll: Optional bound NLL callable overriding the Gaussian likelihood.
+
+        Returns:
+            The sampled ``ValueFunction`` (also stored for warm-starting).
+        """
         if self.should_warm_start and self.warm_start_model is not None:
             initial_model = self.warm_start_model
         else:
@@ -60,6 +111,12 @@ class TSAgent(AbstractAgent):
         return sampled_model
 
     def suggest(self, n_suggestions=1, fix_input=None):
+        """Propose the next configurations to evaluate (see `AbstractAgent.suggest`).
+
+        Identical to the base implementation, except that the ``nll`` factory,
+        when present, is bound to the current context (``fix_input``) and the
+        observation history before posterior sampling.
+        """
         fix_input = fix_input or {}
         if self.X.shape[0] < self.rand_sample:
             return self.quasi_sample(n_suggestions, fix_input)
@@ -77,6 +134,13 @@ class TSAgent(AbstractAgent):
         }
 
     def pick_action(self, model, fix_input, n_suggestions=1):
+        """Minimise the sampled value function over the design space.
+
+        Runs an evolutionary optimiser seeded at the incumbent, keeps the
+        final population, filters out already-observed rows, pads with
+        quasi-random samples if needed, and returns the top ``n_suggestions``
+        rows.
+        """
         best_id = self.get_best_id(fix_input)
         best_x = self.X.iloc[[best_id]]
 
@@ -95,11 +159,16 @@ class TSAgent(AbstractAgent):
         return rec.head(n_suggestions).copy()
 
     def num_samplable_params(self) -> int:
-        """Count of `ValueFunction` parameters with `requires_grad=True`
-        — the exact set both `LangevinSampler` and `NUTSSampler` iterate
-        over. Determined by architecture alone (network builder +
-        feature extractor + scalers), so a throwaway `ValueFunction`
-        instance suffices to read it off. Cached after the first call."""
+        """Count the ``ValueFunction`` parameters with ``requires_grad=True``.
+
+        This is the exact set both `LangevinSampler` and ``NUTSSampler``
+        iterate over. It is determined by architecture alone (network builder
+        + feature extractor + scalers), so a throwaway ``ValueFunction``
+        instance suffices to read it off. Cached after the first call.
+
+        Returns:
+            Total number of samplable scalar parameters.
+        """
         if self._num_samplable_params is None:
             vf = ValueFunction(
                 self.space.num_numeric,

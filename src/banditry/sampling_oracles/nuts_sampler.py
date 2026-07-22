@@ -15,7 +15,46 @@ from banditry.surrogates.tsmodel import ValueFunction
 
 
 class NUTSSampler(Sampler):
-    """Sample TS model weights from a posterior using Pyro NUTS."""
+    """Sample TS model weights from a posterior using Pyro NUTS.
+
+    Runs the No-U-Turn Sampler (Hoffman & Gelman, 2014) via Pyro's ``MCMC`` over all
+    trainable model parameters plus a per-output observation-noise parameter, then returns
+    the model with one randomly chosen posterior draw loaded. Weights receive an isotropic
+    zero-mean Gaussian prior with standard deviation ``prior_std``; the observation noise
+    is parameterised through a sigmoid squashed into ``(min_obs_noise, max_obs_noise)``
+    with a Gaussian prior on the unconstrained value.
+
+    Requires the ``banditry[nuts]`` extra (installs ``pyro-ppl``).
+
+    The constructor keyword arguments below are exactly the valid keys of
+    ``TSConfig.sampler_config`` when ``sampler="nuts"``.
+
+    Args:
+        num_samples: Number of posterior draws collected after warmup; one is picked
+            uniformly at random as the returned sample.
+        warmup_steps: Number of warmup (adaptation) iterations discarded before sampling.
+        target_accept_prob: Target acceptance probability for step-size adaptation.
+        max_tree_depth: Maximum doubling depth of the NUTS trajectory tree.
+        adapt_step_size: Whether to adapt the leapfrog step size during warmup.
+        adapt_mass_matrix: Whether to adapt the mass matrix during warmup.
+        use_multinomial_sampling: Whether to draw states multinomially from the trajectory
+            instead of using slice sampling.
+        prior_std: Standard deviation of the zero-mean Gaussian prior over model weights.
+        obs_noise_prior_loc: Prior mean of the log observation noise; clamped into
+            ``[log(min_obs_noise), log(max_obs_noise)]`` and mapped to the unconstrained
+            parameterisation.
+        obs_noise_prior_scale: Prior standard deviation of the unconstrained
+            observation-noise parameter.
+        init_obs_noise: Initial observation-noise standard deviation (in standardised-y
+            units), clamped into the allowed range.
+        min_obs_noise: Lower bound of the observation-noise range.
+        max_obs_noise: Upper bound of the observation-noise range.
+        jit_compile: Whether Pyro should JIT-compile the potential function.
+        ignore_jit_warnings: Whether to silence JIT tracer warnings.
+        disable_progbar: Whether to hide the MCMC progress bar.
+        generator: Optional ``torch.Generator``; seeds Pyro's RNG and drives the choice of
+            the returned draw, for reproducibility.
+    """
 
     def __init__(
         self,
@@ -58,18 +97,22 @@ class NUTSSampler(Sampler):
 
     @staticmethod
     def _site_name(index: int) -> str:
+        """Pyro sample-site name for the ``index``-th trainable parameter."""
         return f"param_{index}"
 
     def _noise_to_raw(self, noise: float) -> float:
+        """Map an observation-noise value to its unconstrained (logit) parameterisation."""
         span = self.max_obs_noise - self.min_obs_noise
         p = (noise - self.min_obs_noise) / span
         p = max(1e-7, min(1.0 - 1e-7, p))
         return math.log(p) - math.log1p(-p)
 
     def _raw_to_noise(self, raw_noise: torch.Tensor) -> torch.Tensor:
+        """Map the unconstrained parameter back to ``(min_obs_noise, max_obs_noise)`` via sigmoid."""
         return self.min_obs_noise + (self.max_obs_noise - self.min_obs_noise) * torch.sigmoid(raw_noise)
 
     def _raw_noise_prior_loc(self) -> float:
+        """Unconstrained prior mean derived from ``obs_noise_prior_loc`` (a log-noise value)."""
         prior_log_noise = min(
             max(self.obs_noise_prior_loc, math.log(self.min_obs_noise)),
             math.log(self.max_obs_noise),
@@ -84,6 +127,29 @@ class NUTSSampler(Sampler):
         y: FloatTensor,
         nll: Callable[..., FloatTensor] | None = None,
     ) -> ValueFunction:
+        """Draw one posterior weight sample via NUTS MCMC.
+
+        Standardises ``y`` (and fits the model's x-scaler), builds a Pyro model whose
+        log-density combines the weight and noise priors with ``-nll`` as the likelihood
+        factor, runs NUTS for ``warmup_steps`` plus ``num_samples`` iterations, and loads
+        one uniformly chosen posterior draw into a deep copy of ``model``.
+
+        Args:
+            model: Template ``ValueFunction``; left unmodified.
+            Xc: Continuous features of shape ``(n, model.num_cont)``, or ``None``.
+            Xe: Categorical features of shape ``(n, model.num_enum)``, or ``None``.
+            y: Observed targets of shape ``(n, model.num_out)``.
+            nll: Optional NLL callable ``(pred, target, obs_std, **kwargs)``; its sum is
+                used as the negative log-likelihood factor. Defaults to the Gaussian NLL.
+
+        Returns:
+            A new ``ValueFunction`` in eval mode carrying the sampled weights and the
+            fitted y-scaler.
+
+        Raises:
+            ValueError: If the model has no trainable parameters.
+            RuntimeError: If MCMC returns no posterior draws.
+        """
 
         nll_fn = _gaussian_nll if nll is None else nll
 

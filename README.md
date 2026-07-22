@@ -4,8 +4,11 @@
 [![PyPI](https://img.shields.io/pypi/v/banditry)](https://pypi.org/project/banditry/)
 [![Python](https://img.shields.io/pypi/pyversions/banditry)](https://pypi.org/project/banditry/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-vahanarsenian.github.io%2Fbanditry-blue)](https://vahanarsenian.github.io/banditry/)
 
 Contextual bandit agents for black-box optimisation over mixed design spaces.
+
+**Documentation:** [vahanarsenian.github.io/banditry](https://vahanarsenian.github.io/banditry/)
 
 `banditry` isolates the bandit routines from
 [MetaFrieren](https://github.com/VahanArsenian/MetaFrieren/tree/main) into a
@@ -45,6 +48,12 @@ pieces of that loop as composable modules:
 Contexts are supported throughout: any subset of parameters can be pinned to
 observed environment values each round, turning the loop into a contextual
 bandit.
+
+![Thompson sampling vs Feel-Good Thompson sampling on the gaussian_valley benchmark](docs/assets/feel-good-ts.png)
+
+*Best-so-far trace of plain vs Feel-Good Thompson sampling (Langevin posterior
+sampling) on the built-in `gaussian_valley` benchmark — reproduce with
+[`examples/04_feel_good_ts.py`](examples/04_feel_good_ts.py).*
 
 ## Installation
 
@@ -209,6 +218,15 @@ banditry-bench --agent ofugp-svgp  --benchmark contextual_branin --n-iter 30 --s
 Agents: `ofugp-gp`, `ofugp-svgp`, `ts-langevin`, `ts-nuts`. Benchmarks:
 `branin`, `contextual_branin`, `gaussian_valley`, `contextual_gaussian_valley`.
 
+### Examples
+
+Runnable, seeded example scripts live in [`examples/`](examples/):
+
+1. [`01_quickstart_branin.py`](examples/01_quickstart_branin.py) — GP-UCB on Branin
+2. [`02_mixed_design_space.py`](examples/02_mixed_design_space.py) — num + int + bool + cat parameters
+3. [`03_contextual_bandit.py`](examples/03_contextual_bandit.py) — pinning observed context via `fix_input`
+4. [`04_feel_good_ts.py`](examples/04_feel_good_ts.py) — TS vs Feel-Good TS comparison plot
+
 ## Origins & acknowledgements
 
 - Partially inspired by [HEBO](https://github.com/huawei-noah/HEBO/tree/master/HEBO)
@@ -228,7 +246,7 @@ If you use `banditry` in your research, please cite:
   title   = {banditry: contextual bandit agents with Gaussian-process surrogates},
   year    = {2026},
   url     = {https://github.com/VahanArsenian/banditry},
-  version = {0.2.0}
+  version = {0.3.0}
 }
 ```
 

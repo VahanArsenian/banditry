@@ -17,6 +17,34 @@ from banditry.variable_domains.transforms import TorchMinMaxScaler, TorchStandar
 
 
 class GP(BaseModel):
+    """Exact Gaussian-process surrogate built on gpytorch's ``ExactGP``.
+
+    Implements the :class:`BaseModel` fit/predict interface: :meth:`fit` learns the
+    hyperparameters by maximising the exact marginal log likelihood and
+    :meth:`predict` returns the posterior ``(mean, variance)``. Continuous inputs are
+    min-max scaled to ``[-1, 1]`` and targets are standardised internally; Cholesky
+    failures are retried with increasing jitter.
+
+    Config keys (passed via ``**conf``):
+        - ``lr`` (float, default ``3e-2``): learning rate for the hyperparameter optimiser.
+        - ``num_epochs`` (int, default ``100``): number of optimisation steps.
+        - ``verbose`` (bool, default ``False``): log the loss during fitting.
+        - ``print_every`` (int, default ``10``): logging period (in epochs) when verbose.
+        - ``pred_likeli`` (bool, default ``True``): predictive variance includes
+          observation noise when True; when False it is the variance of the latent
+          function ``f`` only.
+        - ``noise_lb`` (float, default ``1e-5``): lower bound on the likelihood noise.
+        - ``noise_guess`` (float, default ``0.01``): location of the log-normal noise prior.
+        - ``ard_kernel`` (bool, default ``True``): ARD lengthscales in the default kernel.
+        - ``optimizer`` (str, default ``"adam"``): one of ``"adam"``, ``"lbfgs"``, ``"sgld"``.
+        - ``num_uniqs`` (list[int], required when ``num_enum > 0``): cardinality of each
+          categorical column.
+        - ``emb_sizes`` (list[int], optional): embedding sizes for the categorical columns.
+        - ``kern`` (gpytorch kernel, optional): covariance override; defaults to
+          :func:`default_kern`. ``mean``, ``fe`` and ``product_kernel`` are likewise
+          forwarded to :class:`GPyTorchModel`.
+    """
+
     support_grad = True
 
     def __init__(self, num_cont, num_enum, num_out, **conf):
@@ -171,6 +199,14 @@ class GP(BaseModel):
 
 
 class GPyTorchModel(gpytorch.models.ExactGP):
+    """Underlying gpytorch ``ExactGP`` used by :class:`GP`.
+
+    Combines a feature extractor (``conf["fe"]``, default
+    :class:`DummyFeatureExtractor`) with a mean (``conf["mean"]``, default
+    ``ConstantMean``) and a covariance (``conf["kern"]``, default
+    :func:`default_kern`) over the joint continuous + embedded-categorical features.
+    """
+
     def __init__(self, x: torch.Tensor, xe: torch.Tensor, y: torch.Tensor, lik: GaussianLikelihood, **conf):
         super().__init__((x, xe), y.squeeze(), lik)
         self.fe = deepcopy(

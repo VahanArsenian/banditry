@@ -27,6 +27,22 @@ from banditry.variable_domains.transforms import DummyFeatureExtractor, TorchMin
 def filter_nan(
     x: FloatTensor, xe: LongTensor, y: FloatTensor, keep_rule="any"
 ) -> tuple[FloatTensor, LongTensor, FloatTensor]:
+    """Drop rows whose targets are non-finite.
+
+    Args:
+        x: Continuous inputs of shape ``(n, num_cont)``, or ``None``.
+        xe: Categorical (index) inputs of shape ``(n, num_enum)``, or ``None``.
+        y: Targets of shape ``(n, num_out)``; may contain NaN/inf entries.
+        keep_rule: ``"any"`` keeps rows where at least one output is finite;
+            any other value keeps only rows where all outputs are finite.
+
+    Returns:
+        ``(x, xe, y)`` restricted to the kept rows (``None`` inputs stay ``None``).
+
+    Raises:
+        AssertionError: If ``x``/``xe`` contain non-finite values or no row of ``y``
+            has a finite entry.
+    """
     assert x is None or torch.isfinite(x).all()
     assert xe is None or torch.isfinite(xe).all()
     assert torch.isfinite(y).any(), "No valid data in the dataset"
@@ -42,6 +58,29 @@ def filter_nan(
 
 
 def default_kern(x, xe, y, total_dim=None, ard_kernel=True, use_product_kernel=True, max_x=1000):
+    """Build the default Matern-3/2 covariance used by the GP surrogates.
+
+    With ``use_product_kernel=True`` the result is a scaled *product* of a numeric
+    Matern kernel (over the first ``x.shape[1]`` feature dims, ARD lengthscales
+    initialised with a median-distance heuristic) and a categorical Matern kernel
+    (over the remaining embedded dims up to ``total_dim``). Factorising across the
+    two blocks restricts the function class and so mitigates the curse of
+    dimensionality for maximal information gain. Otherwise a single (optionally ARD)
+    Matern kernel over all ``total_dim`` dims is returned. The output scale is
+    initialised to the variance of the finite targets.
+
+    Args:
+        x: Continuous training inputs ``(n, num_cont)``; may be ``None``/empty.
+        xe: Categorical training inputs ``(n, num_enum)``; may be ``None``/empty.
+        y: Training targets, used to initialise the output scale.
+        total_dim: Total feature dimension after the feature extractor.
+        ard_kernel: Use one lengthscale per input dimension.
+        use_product_kernel: Factorise the kernel between numeric and categorical blocks.
+        max_x: Maximum number of rows used by the median-lengthscale heuristic.
+
+    Returns:
+        A gpytorch kernel.
+    """
     # if use_product_kernel is true, then returns a kernel that is product factorised
     # between categorical (enumeration type variables in general) and numerical ones.
     # It aims to mitigate the curse of dimensionality for maximal information gain by
@@ -80,6 +119,20 @@ def default_kern(x, xe, y, total_dim=None, ard_kernel=True, use_product_kernel=T
 
 # TODO: Does not support sampling value functions from the surrogate
 class BaseModel(ABC):
+    """Abstract fit/predict contract shared by all surrogate models.
+
+    A surrogate is constructed with the input layout -- ``num_cont`` continuous
+    columns, ``num_enum`` categorical index columns, ``num_out`` outputs -- plus
+    model-specific ``**conf`` options. It is trained with ``fit(Xc, Xe, y)`` and
+    queried with ``predict(Xc, Xe)``, which returns a ``(mean, variance)`` tuple,
+    each of shape ``(n, num_out)``. ``sample_y`` draws samples from the predictive
+    distribution (independent Gaussians by default) and ``noise`` reports the
+    observation-noise variance. The class flags ``support_ts``, ``support_grad``,
+    ``support_multi_output`` and ``support_warm_start`` advertise optional
+    capabilities. When ``num_enum > 0``, ``conf["num_uniqs"]`` (list of per-column
+    cardinalities) is required.
+    """
+
     support_ts = False
     support_grad = False
     support_multi_output = False
@@ -103,10 +156,12 @@ class BaseModel(ABC):
 
     @abstractmethod
     def fit(self, Xc: FloatTensor, Xe: LongTensor, y: FloatTensor):
+        """Train the surrogate on continuous inputs ``Xc``, categorical inputs ``Xe`` and targets ``y``."""
         pass
 
     @abstractmethod
     def predict(self, Xc: FloatTensor, Xe: LongTensor) -> tuple[FloatTensor, FloatTensor]:
+        """Return the predictive ``(mean, variance)``, each of shape ``(n, num_out)``."""
         pass
 
     @property
@@ -123,6 +178,8 @@ class BaseModel(ABC):
 
 
 class SVGPLayer(ApproximateGP):
+    """Single-output ``ApproximateGP`` with a variational strategy over inducing points ``u``."""
+
     def __init__(self, mean, kern, u, learn_u, use_ngd):
         num_inducing = u.shape[0]
         if use_ngd:
@@ -146,6 +203,8 @@ class SVGPLayer(ApproximateGP):
 
 
 class SVGPList(gpytorch.Module):
+    """Container of per-output :class:`SVGPLayer` GPs; in training mode each layer only sees finite-target rows."""
+
     def __init__(self, gp_list):
         super().__init__()
         self.num_out = len(gp_list)
@@ -166,6 +225,8 @@ class SVGPList(gpytorch.Module):
 
 
 class SVGPModel(gpytorch.Module):
+    """Feature extractor plus one :class:`SVGPLayer` per output; inducing points are drawn from training rows."""
+
     def __init__(self, x, xe, y, num_inducing=128, **conf):
         super().__init__()
         self.num_out = y.shape[1]
@@ -212,6 +273,39 @@ class SVGPModel(gpytorch.Module):
 
 
 class SVGP(BaseModel):
+    """Sparse variational GP surrogate trained by minibatch ELBO maximisation.
+
+    Uses inducing points (one ``ApproximateGP`` per output), so it scales to larger
+    datasets than the exact :class:`~banditry.surrogates.gp.GP`, supports
+    multi-output targets with missing (NaN) entries, and can optionally use natural
+    gradient descent for the variational parameters. Continuous inputs are min-max
+    scaled to ``[-1, 1]`` and targets are standardised internally.
+
+    Config keys (passed via ``**conf``):
+        - ``num_inducing`` (int, default ``128``): number of inducing points (capped at
+          the number of training rows).
+        - ``batch_size`` (int, default ``64``): minibatch size for the ELBO.
+        - ``num_epochs`` (int, default ``300``): number of training epochs.
+        - ``lr`` (float, default ``1e-2``): learning rate for kernel/likelihood
+          hyperparameters.
+        - ``lr_vp`` (float, default ``1e-1``): learning rate for the variational parameters.
+        - ``lr_fe`` (float, default ``1e-3``): learning rate for the feature extractor.
+        - ``use_ngd`` (bool, default ``False``): natural gradient descent for the
+          variational parameters.
+        - ``ard_kernel`` (bool, default ``True``): ARD lengthscales in the default kernel.
+        - ``beta`` (float, default ``1.0``): KL weight in the variational ELBO.
+        - ``noise_lb`` (float, default ``1e-5``): lower bound on the likelihood noise.
+        - ``verbose`` (bool, default ``False``): log the loss during fitting.
+        - ``print_every`` (int, default ``10``): logging period (in epochs) when verbose.
+        - ``pred_likeli`` (bool, default ``True``): predictive variance includes
+          observation noise when True; latent ``f`` variance only when False.
+        - ``num_uniqs`` (list[int], required when ``num_enum > 0``): cardinality of each
+          categorical column.
+
+        Also forwarded to :class:`SVGPModel`: ``emb_sizes``, ``fe``, ``mean``, ``kern``,
+        ``product_kernel``, ``learn_u``.
+    """
+
     support_grad = True
     support_multi_output = True
 

@@ -13,6 +13,16 @@ from banditry.variable_domains.transforms import (
 
 
 def default_network_builder(in_dim: int, out_dim: int) -> nn.Module:
+    """Default network factory for :class:`ValueFunction`.
+
+    Args:
+        in_dim: Input feature dimension.
+        out_dim: Output dimension.
+
+    Returns:
+        An ``nn.Sequential`` MLP with two hidden layers of width ``2 * in_dim``,
+        each followed by ``LayerNorm`` and ``Tanh``.
+    """
     # Non linear Neural net, 2 layers hidden dim 128, activation Swiglu
 
     layers = []
@@ -29,6 +39,36 @@ def default_network_builder(in_dim: int, out_dim: int) -> nn.Module:
 
 
 class ValueFunction(nn.Module):
+    """Neural value model whose weights Thompson sampling draws from the posterior.
+
+    Wraps a feature extractor and a value network into a single module mapping
+    ``(Xc, Xe)`` to value predictions of shape ``(n, num_out)``. Thompson sampling
+    treats the network weights as random: a posterior draw over the weights yields a
+    sampled value function that is then optimised over the design space. Continuous
+    inputs are min-max scaled to ``[-1, 1]`` (call :meth:`fit_x_scaler` first) and
+    predictions are un-scaled through an attached target scaler when one is set
+    (:meth:`set_y_scaler`).
+
+    Config keys (read in ``__init__`` via ``**conf``):
+        - ``num_uniqs`` (list[int], required when ``num_enum > 0``): cardinality of each
+          categorical column.
+        - ``emb_sizes`` (list[int], optional): embedding sizes for the categorical columns.
+        - ``fe`` (nn.Module, optional): feature-extractor override; defaults to
+          :class:`DummyFeatureExtractor`.
+
+    Args:
+        num_cont: Number of continuous input columns.
+        num_enum: Number of categorical (index) input columns.
+        num_out: Number of outputs.
+        yscaler: Optional fitted target scaler used to un-scale predictions.
+        network_builder: Callable ``(in_dim, out_dim) -> nn.Module`` building the
+            value network; defaults to :func:`default_network_builder`.
+        **conf: See "Config keys" above.
+
+    Raises:
+        TypeError: If ``network_builder`` does not return an ``nn.Module``.
+    """
+
     def __init__(
         self,
         num_cont: int,

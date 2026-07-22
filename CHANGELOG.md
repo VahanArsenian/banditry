@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-22
+
+### Added
+
+- **Documentation site** at <https://vahanarsenian.github.io/banditry/>:
+  getting-started, guides (design spaces, contextual bandits, choosing an
+  agent, configuring samplers), benchmark CLI reference, and a full
+  mkdocstrings API reference; deployed automatically from `main`.
+- **Docstrings across the public API**, including field-by-field documentation
+  of `OFUGPConfig`/`TSConfig` and every key of `DEFAULT_LANGEVIN_CONFIG` and
+  `DEFAULT_NUTS_CONFIG`.
+- **`py.typed` marker** and type annotations on the core loop API
+  (`suggest`/`observe`/`quasi_sample`/`get_best_id`), so type checkers and
+  IDEs pick up the library's inline types.
+- **`examples/` directory** with four seeded, CPU-only scripts: quickstart
+  (Branin), mixed design space, contextual bandit, and a TS vs Feel-Good TS
+  comparison that generates the README plot.
+- `docs` extra (`pip install "banditry[docs]"`) and `Documentation` project
+  URL.
+
 ## [0.2.0] - 2026-07-22
 
 ### Changed
@@ -41,5 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (numeric/int/bool/categorical), evolutionary acquisition optimisation
   (pymoo), and contextual bandit support via `fix_input`.
 
+[0.3.0]: https://github.com/VahanArsenian/banditry/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/VahanArsenian/banditry/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/VahanArsenian/banditry/releases/tag/v0.1.0

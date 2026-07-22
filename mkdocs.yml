@@ -1,0 +1,63 @@
+site_name: banditry
+site_description: Contextual bandit agents for black-box optimisation over mixed design spaces
+site_url: https://vahanarsenian.github.io/banditry/
+repo_url: https://github.com/VahanArsenian/banditry
+repo_name: VahanArsenian/banditry
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            merge_init_into_class: true
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - pymdownx.snippets:
+      base_path: [.]
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guides:
+      - Design spaces: guides/design-spaces.md
+      - Contextual bandits: guides/contextual-bandits.md
+      - Choosing an agent: guides/choosing-an-agent.md
+      - Configuring samplers: guides/configuring-samplers.md
+  - Benchmarks: benchmarks.md
+  - API reference:
+      - Agents: api/agents.md
+      - Design spaces: api/variable-domains.md
+      - Surrogates: api/surrogates.md
+      - Sampling oracles: api/sampling-oracles.md
+      - Optimisation: api/optimisation.md
+  - Changelog: changelog.md

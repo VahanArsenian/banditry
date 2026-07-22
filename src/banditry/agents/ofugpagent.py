@@ -1,3 +1,5 @@
+"""GP-UCB / optimism-in-the-face-of-uncertainty agent and its surrogate registry."""
+
 import enum
 from collections.abc import Callable
 
@@ -15,6 +17,15 @@ from banditry.variable_domains.design_space import DesignSpace
 
 
 class ModelEnum(enum.Enum):
+    """GP surrogate registry for `OFUGPAgent`.
+
+    Members map surrogate names to classes: ``gp`` is an exact Gaussian
+    process (accurate, but cubic cost in the number of observations) and
+    ``svgp`` is a sparse variational GP (inducing-point approximation that
+    scales to larger datasets). `model_config` builds the per-surrogate
+    default configuration.
+    """
+
     svgp = SVGP
     gp = GP
 
@@ -29,6 +40,19 @@ class ModelEnum(enum.Enum):
             return False
 
     def model_config(self, space: DesignSpace, configs_to_override=None):
+        """Build the default constructor config for this surrogate.
+
+        Args:
+            space: Design space (used to derive categorical cardinalities).
+            configs_to_override: Optional overrides merged on top of the defaults.
+
+        Returns:
+            Keyword-argument dict for the surrogate class constructor. For
+            ``svgp``: ``batch_size``, ``num_inducing``, ``use_ngd``. For ``gp``:
+            ``lr``, ``num_epochs``, ``verbose``, ``noise_lb``, ``pred_likeli``,
+            ``optimizer``. When the space has categorical parameters,
+            ``num_uniqs`` (per-parameter cardinalities) is added.
+        """
         cfg = {}
         if self == ModelEnum.svgp:
             cfg = {"batch_size": 128, "num_inducing": 256, "use_ngd": False}
@@ -48,6 +72,41 @@ class ModelEnum(enum.Enum):
 
 
 class OFUGPAgent(AbstractAgent):
+    """Optimism-in-the-face-of-uncertainty (GP-UCB) agent.
+
+    Fits a GP surrogate to the observations and suggests the minimiser of a
+    lower-confidence-bound acquisition ``mu - kappa * sigma`` (or of the MACE
+    multi-objective ensemble), optimised with an evolutionary optimiser over
+    the design space, with context parameters pinned via ``fix_input``.
+
+    The confidence multiplier `kappa` is Bayesian by default; with
+    ``frequentist=True`` it becomes the Chowdhury-Gopalan (2017, "On
+    Kernelized Multi-armed Bandits") ``beta_t``, which requires the RKHS-norm
+    bound ``B`` (``rkhs_norm``) and the sub-Gaussian noise scale ``R``
+    (``noise_std_proxy``).
+
+    Args:
+        space: The design space to optimise over.
+        noise_std_proxy: Sub-Gaussian / GP observation-noise scale ``R``.
+            Required — the constructor raises ``ValueError`` if ``None``. Used
+            by the frequentist ``beta_t`` and by the realised information gain
+            accumulated on every `observe`.
+        surrogate: `ModelEnum` member selecting the GP surrogate
+            (default: ``ModelEnum.svgp``).
+        rand_sample: Sobol warmup budget; see `AbstractAgent`.
+        acq_cls: Acquisition class — ``LCB`` (default) or ``MACE`` (MACE is
+            required for ``n_suggestions > 1``).
+        model_config: Overrides merged into the surrogate's default config
+            (see `ModelEnum.model_config`).
+        frequentist: Use the Chowdhury-Gopalan ``beta_t`` instead of the
+            Bayesian confidence width (default ``False``).
+        delta: Confidence level ``delta`` appearing in both width formulas
+            (default ``0.01``).
+        kappa_fn: Optional callable ``(agent, n_suggestions) -> float``
+            overriding `kappa` entirely.
+        rkhs_norm: RKHS-norm bound ``B``; required when ``frequentist=True``.
+    """
+
     support_parallel_opt = True
     support_combinatorial = True
     support_contextual = True
@@ -83,6 +142,7 @@ class OFUGPAgent(AbstractAgent):
         self._pending_var_t: np.ndarray | None = None
 
     def get_model(self, X, Xe, y):
+        """Instantiate the configured GP surrogate and fit it to the data."""
         model = self.surrogate.value(
             self.space.num_numeric,
             self.space.num_categorical,
@@ -93,6 +153,28 @@ class OFUGPAgent(AbstractAgent):
         return model
 
     def kappa(self, n_suggestions):
+        """Confidence multiplier for the LCB acquisition ``mu - kappa * sigma``.
+
+        If a ``kappa_fn`` override was supplied, it is delegated to. Otherwise,
+        with ``t = max(1, n_plays() // n_suggestions)`` rounds played and input
+        dimension ``d``:
+
+        - Bayesian (default): ``beta_t = (2 + d/2) * ln(t) + ln(pi^2 / delta)``
+          and ``sqrt(beta_t)`` is returned.
+        - Frequentist (``frequentist=True``): the Chowdhury-Gopalan width
+          ``beta_t = B + 4 * R * sqrt(gamma_t + 1 + ln(1/delta))``, where
+          ``gamma_t`` is the realised information gain accumulated across
+          `observe` calls; returned as is (already on the sqrt scale).
+
+        Args:
+            n_suggestions: Batch size of the current round (scales the round counter).
+
+        Returns:
+            The multiplier applied to the predictive standard deviation.
+
+        Raises:
+            ValueError: If ``frequentist=True`` and no ``rkhs_norm`` was provided.
+        """
         # TODO: Rework
         if self._kappa_fn is not None:
             return self._kappa_fn(self, n_suggestions)
@@ -115,6 +197,17 @@ class OFUGPAgent(AbstractAgent):
             return np.sqrt(beta_t)
 
     def pick_action(self, model, fix_input, n_suggestions=1):
+        """Optimise the acquisition and select ``n_suggestions`` candidates.
+
+        Runs an evolutionary optimiser seeded at the incumbent, pads with
+        quasi-random samples if needed, and — for batches larger than 2 —
+        reserves slots for the most uncertain and the best-predicted
+        candidates. The selected candidates' predictive variances are cached
+        for the information-gain update in `observe`.
+
+        Raises:
+            RuntimeError: If ``n_suggestions > 1`` with a non-MACE acquisition.
+        """
         if self.acq_cls != MACE and n_suggestions != 1:
             raise RuntimeError("Parallel optimization is supported only for MACE acquisition")
 
@@ -151,7 +244,13 @@ class OFUGPAgent(AbstractAgent):
         return rec_selected
 
     def observe(self, X, y):
+        """Record observations and update the realised information gain.
 
+        Uses the predictive variances cached by `pick_action` when available
+        (otherwise refits the GP on the past data, falling back to the prior
+        variance on failure) to accumulate ``0.5 * sum(log(1 + var / R^2))``,
+        then delegates to `AbstractAgent.observe`.
+        """
         if self._pending_var_t is not None:
             var_t = self._pending_var_t
             self._pending_var_t = None

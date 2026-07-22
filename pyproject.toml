@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "banditry"
-version = "0.2.0"
+version = "0.3.0"
 description = "Contextual bandit agents (GP-UCB and Thompson sampling) with GP surrogates, evolutionary acquisition optimisation, and Langevin/NUTS posterior sampling."
 readme = "README.md"
 license = "MIT"
@@ -45,17 +45,22 @@ dependencies = [
 [project.optional-dependencies]
 nuts = ["pyro-ppl>=1.8,<2"]
 dev = ["pytest>=8", "ruff"]
+docs = ["mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
 
 [project.scripts]
 banditry-bench = "banditry.benchmark:main"
 
 [project.urls]
+Documentation = "https://vahanarsenian.github.io/banditry/"
 Repository = "https://github.com/VahanArsenian/banditry"
 Issues = "https://github.com/VahanArsenian/banditry/issues"
 Changelog = "https://github.com/VahanArsenian/banditry/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+banditry = ["py.typed"]
 
 [tool.ruff]
 target-version = "py310"
