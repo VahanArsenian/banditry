@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.quasirandom import SobolEngine
-from pybandits.variable_domains.design_space import DesignSpace
+from banditry.variable_domains.design_space import DesignSpace
 
-import pybandits.logging_utils as log
-from pybandits.labels import agent_display_name
+import banditry.logging_utils as log
+from banditry.labels import agent_display_name
 
 
 class AbstractAgent(ABC):

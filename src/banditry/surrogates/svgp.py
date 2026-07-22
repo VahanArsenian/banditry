@@ -16,7 +16,7 @@ from gpytorch.priors import GammaPrior
 from gpytorch.constraints import GreaterThan
 from gpytorch.variational import CholeskyVariationalDistribution, VariationalStrategy, NaturalVariationalDistribution, TrilNaturalVariationalDistribution
 from gpytorch.kernels import MaternKernel, ScaleKernel, ProductKernel
-from pybandits.variable_domains.transforms import TorchMinMaxScaler, TorchStandardScaler, DummyFeatureExtractor
+from banditry.variable_domains.transforms import TorchMinMaxScaler, TorchStandardScaler, DummyFeatureExtractor
 
 
 def filter_nan(x: FloatTensor, xe: LongTensor, y: FloatTensor, keep_rule='any') -> tuple[FloatTensor, LongTensor, FloatTensor]:
@@ -302,7 +302,7 @@ class SVGP(BaseModel):
                 epoch_cnt += 1
             epoch_loss /= epoch_cnt
             if self.verbose and ((epoch + 1) % self.print_every == 0 or epoch == 0):
-                import pybandits.logging_utils as log
+                import banditry.logging_utils as log
                 log.debug('After %d epochs, loss = %g' % (epoch + 1, epoch_loss))
         self.gp.eval()
         self.lik.eval()

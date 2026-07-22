@@ -4,14 +4,14 @@ from typing import Callable, Optional
 import numpy as np
 import torch
 
-from pybandits.variable_domains.design_space import DesignSpace
-from pybandits.surrogates.svgp import SVGP
-from pybandits.surrogates.gp import GP
-from pybandits.optimisation_subroutines.objectives import MACE, LCB
-from pybandits.optimisation_subroutines.contextal_problem import ContextualProblem
-from pybandits.optimisation_oracles.gen_alg import EvolutionOpt
-from pybandits.agents.agent import AbstractAgent
-from pybandits.constants import PI_SQUARED
+from banditry.variable_domains.design_space import DesignSpace
+from banditry.surrogates.svgp import SVGP
+from banditry.surrogates.gp import GP
+from banditry.optimisation_subroutines.objectives import MACE, LCB
+from banditry.optimisation_subroutines.contextal_problem import ContextualProblem
+from banditry.optimisation_oracles.gen_alg import EvolutionOpt
+from banditry.agents.agent import AbstractAgent
+from banditry.constants import PI_SQUARED
 
 
 class ModelEnum(enum.Enum):
@@ -159,7 +159,7 @@ class OFUGPAgent(AbstractAgent):
                     _, var_new = model.predict(xc_new, xe_new)
                 var_t = var_new.detach().cpu().numpy().reshape(-1)
             except Exception:
-                import pybandits.logging_utils as log
+                import banditry.logging_utils as log
                 log.debug("OFUGPAgent.observe: GP fit failed; falling back to prior variance")
                 var_t = np.ones(len(X))
         else:

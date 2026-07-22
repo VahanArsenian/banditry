@@ -3,13 +3,36 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pybandits"
+name = "banditry"
 version = "0.1.0"
 description = "Contextual bandit agents (GP-UCB and Thompson sampling) with GP surrogates, evolutionary acquisition optimisation, and Langevin/NUTS posterior sampling."
 readme = "README.md"
 license = "CC-BY-NC-SA-4.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [
+    { name = "Vahan Arsenian" },
+]
+keywords = [
+    "bandits",
+    "contextual-bandits",
+    "bayesian-optimisation",
+    "gaussian-process",
+    "thompson-sampling",
+    "gp-ucb",
+    "langevin-dynamics",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "numpy>=1.24,<3",
     "pandas>=2.0,<4",
@@ -21,6 +44,10 @@ dependencies = [
 
 [project.optional-dependencies]
 nuts = ["pyro-ppl>=1.8,<2"]
+
+[project.urls]
+Repository = "https://github.com/VahanArsenian/pyBandits"
+Issues = "https://github.com/VahanArsenian/pyBandits/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

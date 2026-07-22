@@ -7,9 +7,9 @@ import torch.nn as nn
 from torch import FloatTensor, LongTensor
 from torch.utils.data import DataLoader, TensorDataset
 
-from pybandits.optimisation_oracles.sgld import SGLD
-from pybandits.sampling_oracles.sampler import Sampler, _gaussian_nll
-from pybandits.surrogates.tsmodel import ValueFunction
+from banditry.optimisation_oracles.sgld import SGLD
+from banditry.sampling_oracles.sampler import Sampler, _gaussian_nll
+from banditry.surrogates.tsmodel import ValueFunction
 
 
 def welling_teh_schedule(a: float, b: float = 1.0, gamma: float = 0.55, lr_floor: float = 1e-5) -> Callable[[int], float]:
@@ -117,7 +117,7 @@ class LangevinSampler(Sampler):
             min_updates_for_sampling,
         )
         burn_in_updates = self.burn_in * updates_per_epoch
-        import pybandits.logging_utils as log
+        import banditry.logging_utils as log
         log.debug(f"Learning rate after burn in: {self._step_size_fn(burn_in_updates, n_burn_in=burn_in_updates)}")
         
         model_params = [p for p in working_model.parameters() if p.requires_grad]

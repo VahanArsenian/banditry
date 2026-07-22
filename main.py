@@ -10,9 +10,9 @@ import time
 import numpy as np
 import torch
 
-import pybandits.logging_utils as log
-from pybandits.agents.factory import OFUGPConfig, TSConfig, build_agent
-from pybandits.variable_domains.design_space import DesignSpace
+import banditry.logging_utils as log
+from banditry.agents.factory import OFUGPConfig, TSConfig, build_agent
+from banditry.variable_domains.design_space import DesignSpace
 
 
 def branin(df):

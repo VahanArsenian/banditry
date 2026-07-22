@@ -6,8 +6,8 @@ import torch
 from torch import FloatTensor, LongTensor
 from torch.func import functional_call
 
-from pybandits.sampling_oracles.sampler import Sampler, _gaussian_nll
-from pybandits.surrogates.tsmodel import ValueFunction
+from banditry.sampling_oracles.sampler import Sampler, _gaussian_nll
+from banditry.surrogates.tsmodel import ValueFunction
 import pyro
 import pyro.distributions as dist
 from pyro.infer import MCMC, NUTS

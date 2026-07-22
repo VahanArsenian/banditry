@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from torch import FloatTensor, LongTensor
 
-from pybandits.variable_domains.transforms import (
+from banditry.variable_domains.transforms import (
     DummyFeatureExtractor,
     TorchMinMaxScaler,
     TorchStandardScaler,

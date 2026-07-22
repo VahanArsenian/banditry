@@ -12,12 +12,12 @@ from gpytorch.distributions import MultivariateNormal
 from gpytorch.constraints import GreaterThan
 from gpytorch.settings import cholesky_jitter
 
-from pybandits.surrogates.svgp import filter_nan
-from pybandits.surrogates.svgp import BaseModel
-from pybandits.variable_domains.transforms import TorchMinMaxScaler, TorchStandardScaler
+from banditry.surrogates.svgp import filter_nan
+from banditry.surrogates.svgp import BaseModel
+from banditry.variable_domains.transforms import TorchMinMaxScaler, TorchStandardScaler
 
-from pybandits.surrogates.svgp import DummyFeatureExtractor, default_kern
-from pybandits.optimisation_oracles.sgld import SGLD
+from banditry.surrogates.svgp import DummyFeatureExtractor, default_kern
+from banditry.optimisation_oracles.sgld import SGLD
 
 
 class GP(BaseModel):
@@ -68,10 +68,10 @@ class GP(BaseModel):
                 except (torch.linalg.LinAlgError, gpytorch.utils.errors.NotPSDError):
                     jitter *= 10
                     if jitter > max_jitter:
-                        import pybandits.logging_utils as log
+                        import banditry.logging_utils as log
                         log.debug(f"Jitter {jitter} is larger than the max jitter {max_jitter}")
                         return None, False
-                    import pybandits.logging_utils as log
+                    import banditry.logging_utils as log
                     log.debug(f'jitter = {jitter}')
 
     def fit(self, Xc : Tensor, Xe : Tensor, y : Tensor):
@@ -121,12 +121,12 @@ class GP(BaseModel):
 
             _, success = self._with_retried_cholesky(lambda: opt.step(closure=closure))
             if not success:
-                import pybandits.logging_utils as log
+                import banditry.logging_utils as log
                 log.debug('jitter is too large, give up fitting GP')
                 break
 
             if self.verbose and ((epoch + 1) % self.print_every == 0 or epoch == 0):
-                import pybandits.logging_utils as log
+                import banditry.logging_utils as log
                 log.debug('After %d epochs, loss = %g' % (epoch + 1, last_loss[0]))
         self.gp.eval()
         self.lik.eval()
@@ -136,7 +136,7 @@ class GP(BaseModel):
         with gpytorch.settings.fast_pred_var(), gpytorch.settings.debug(False), torch.no_grad():
             pred, success = self._with_retried_cholesky(lambda: self.gp(Xc, Xe))
             if not success:
-                import pybandits.logging_utils as log
+                import banditry.logging_utils as log
                 log.debug('jitter is too large, output random predictions')
                 pred = MultivariateNormal(torch.zeros(len(Xc)), torch.eye(len(Xc)))
             if self.pred_likeli and success:
