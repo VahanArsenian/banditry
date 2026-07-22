@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/banditry)](https://pypi.org/project/banditry/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-vahanarsenian.github.io%2Fbanditry-blue)](https://vahanarsenian.github.io/banditry/)
+
 [![DOI](https://zenodo.org/badge/1307691442.svg)](https://zenodo.org/badge/latestdoi/1307691442)
 
 Contextual bandit agents for black-box optimisation over mixed design spaces.
