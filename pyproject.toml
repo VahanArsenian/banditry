@@ -11,7 +11,7 @@ license = "CC-BY-NC-SA-4.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [
-    { name = "Vahan Arsenian" },
+    { name = "Vahan Arsenyan" },
 ]
 keywords = [
     "bandits",
