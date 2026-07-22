@@ -3,9 +3,9 @@ import numpy as np
 from torch import Tensor
 from torch.distributions import Normal
 from abc import ABC, abstractmethod
-from constants import HALF_LOG_2PI
-from surrogates.svgp import BaseModel
-from surrogates.tsmodel import ValueFunction
+from pybandits.constants import HALF_LOG_2PI
+from pybandits.surrogates.svgp import BaseModel
+from pybandits.surrogates.tsmodel import ValueFunction
 
 
 class Objective(ABC):

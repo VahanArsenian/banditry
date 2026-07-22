@@ -42,8 +42,5 @@ _AGENT_DISPATCH = {
 
 
 def agent_display_name(agent_type: str, params: Optional[dict] = None) -> str:
-    """Publication name from `(class_name, structural_params)`. Unknown
-    types fall back to the class name verbatim — a new agent renders
-    something readable before its case is added here."""
     fn = _AGENT_DISPATCH.get(agent_type)
     return fn(params or {}) if fn is not None else agent_type

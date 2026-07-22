@@ -2,16 +2,16 @@ from typing import Optional
 
 import numpy as np
 
-from agents.agent import AbstractAgent
-from optimisation_oracles.gen_alg import EvolutionOpt
-from optimisation_subroutines.objectives import ThompsonObjective
-from optimisation_subroutines.contextal_problem import ContextualProblem
-from sampling_oracles.langevin_sampler import LangevinSampler
-from sampling_oracles.sampler import NLL, Sampler
-from surrogates.tsmodel import ValueFunction
-from variable_domains.design_space import DesignSpace
+from pybandits.agents.agent import AbstractAgent
+from pybandits.optimisation_oracles.gen_alg import EvolutionOpt
+from pybandits.optimisation_subroutines.objectives import ThompsonObjective
+from pybandits.optimisation_subroutines.contextal_problem import ContextualProblem
+from pybandits.sampling_oracles.langevin_sampler import LangevinSampler
+from pybandits.sampling_oracles.sampler import NLL, Sampler
+from pybandits.surrogates.tsmodel import ValueFunction
+from pybandits.variable_domains.design_space import DesignSpace
 
-import logging_utils as log
+import pybandits.logging_utils as log
 
 
 class TSAgent(AbstractAgent):

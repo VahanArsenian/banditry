@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-from agents.agent import AbstractAgent
-from agents.ofugpagent import OFUGPAgent, ModelEnum
-from agents.tsagent import TSAgent
-from sampling_oracles.langevin_sampler import LangevinSampler, welling_teh_schedule
-from sampling_oracles.sampler import FeelGoodNLL
-from variable_domains.design_space import DesignSpace
+from pybandits.agents.agent import AbstractAgent
+from pybandits.agents.ofugpagent import OFUGPAgent, ModelEnum
+from pybandits.agents.tsagent import TSAgent
+from pybandits.sampling_oracles.langevin_sampler import LangevinSampler, welling_teh_schedule
+from pybandits.sampling_oracles.sampler import FeelGoodNLL
+from pybandits.variable_domains.design_space import DesignSpace
 
 
 @dataclass
@@ -74,7 +74,7 @@ def build_agent(config: AgentConfig, space: DesignSpace) -> AbstractAgent:
     if isinstance(config, TSConfig):
         nll = FeelGoodNLL(fg_lambda=config.fg_lambda, fg_bound=config.fg_bound) if config.feel_good else None
         if config.sampler == "nuts":
-            from sampling_oracles.nuts_sampler import NUTSSampler
+            from pybandits.sampling_oracles.nuts_sampler import NUTSSampler
             sampler_cls = NUTSSampler
             sampler_config = config.sampler_config if config.sampler_config is not None else DEFAULT_NUTS_CONFIG
         elif config.sampler == "langevin":

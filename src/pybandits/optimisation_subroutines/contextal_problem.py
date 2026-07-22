@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from pymoo.core.problem import Problem
 
-from variable_domains.design_space import DesignSpace
-from optimisation_subroutines.objectives import Objective
+from pybandits.variable_domains.design_space import DesignSpace
+from pybandits.optimisation_subroutines.objectives import Objective
 
 
 class ContextualProblem(Problem):

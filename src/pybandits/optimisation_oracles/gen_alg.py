@@ -1,4 +1,4 @@
-from variable_domains.design_space import DesignSpace
+from pybandits.variable_domains.design_space import DesignSpace
 from enum import Enum
 from typing import Optional
 
@@ -219,7 +219,7 @@ class EvolutionOpt:
                        verbose = self.verbose)
 
         if res.X is None:
-            import logging_utils as log
+            import pybandits.logging_utils as log
             log.debug("Optimisation terminated with no solutions found")
 
         if res.X is not None and not return_pop:

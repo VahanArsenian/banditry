@@ -5,10 +5,10 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.quasirandom import SobolEngine
-from variable_domains.design_space import DesignSpace
+from pybandits.variable_domains.design_space import DesignSpace
 
-import logging_utils as log
-from labels import agent_display_name
+import pybandits.logging_utils as log
+from pybandits.labels import agent_display_name
 
 
 class AbstractAgent(ABC):
@@ -131,12 +131,6 @@ class AbstractAgent(ABC):
         return len(self.y)
 
     def label_params(self) -> dict:
-        """Structural attributes that distinguish a variant of this agent
-        class, used by `labels.agent_display_name` to build the
-        publication-quality display string and persisted to
-        `config.json` so plots can re-derive the label without
-        re-running the experiment. Override per subclass; default is an
-        empty dict (display falls back to the class name)."""
         return {}
 
     @property

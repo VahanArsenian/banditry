@@ -10,9 +10,9 @@ import time
 import numpy as np
 import torch
 
-import logging_utils as log
-from agents.factory import OFUGPConfig, TSConfig, build_agent
-from variable_domains.design_space import DesignSpace
+import pybandits.logging_utils as log
+from pybandits.agents.factory import OFUGPConfig, TSConfig, build_agent
+from pybandits.variable_domains.design_space import DesignSpace
 
 
 def branin(df):
@@ -49,7 +49,7 @@ BENCHMARKS = {
 
 parser = argparse.ArgumentParser(description="Run a single agent against a benchmark.")
 parser.add_argument("--agent", choices=["ofugp-gp", "ofugp-svgp", "ts-nuts", "ts-langevin"], default="ofugp-gp")
-parser.add_argument("--benchmark", choices=sorted(BENCHMARKS), default="branin")
+parser.add_argument("--benchmark", choices=sorted(BENCHMARKS), default="gaussian_valley")
 parser.add_argument("--n-iter", type=int, default=30)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--rand-sample", type=int, default=4)

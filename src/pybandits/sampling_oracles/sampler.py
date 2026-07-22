@@ -6,9 +6,9 @@ import pandas as pd
 import torch
 from torch import FloatTensor, LongTensor
 
-from constants import HALF_LOG_2PI
-from surrogates.tsmodel import ValueFunction
-from variable_domains.transforms import TorchStandardScaler
+from pybandits.constants import HALF_LOG_2PI
+from pybandits.surrogates.tsmodel import ValueFunction
+from pybandits.variable_domains.transforms import TorchStandardScaler
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +55,9 @@ class FeelGoodNLL(NLL):
         self.fg_bound = fg_bound
 
     def __call__(self, fix_input: dict, space, X: pd.DataFrame) -> Callable[..., FloatTensor]:
-        from optimisation_oracles.gen_alg import EvolutionOpt
-        from optimisation_subroutines.contextal_problem import ContextualProblem
-        from optimisation_subroutines.objectives import ThompsonObjective
+        from pybandits.optimisation_oracles.gen_alg import EvolutionOpt
+        from pybandits.optimisation_subroutines.contextal_problem import ContextualProblem
+        from pybandits.optimisation_subroutines.objectives import ThompsonObjective
 
         context_names = list(fix_input.keys())
 

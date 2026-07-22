@@ -17,6 +17,7 @@ _VERBOSE = False
 def set_verbose(flag: bool) -> None:
     """Enable/disable the noisy internal prints (surrogate training,
     SGLD step sizes, GA termination notices, etc.)."""
+    
     global _VERBOSE
     _VERBOSE = bool(flag)
 

@@ -3,7 +3,7 @@ import torch
 from torch import Tensor
 
 
-from variable_domains.parameter_types import NumericParameter, CategoricalParameter, BoolParameter, IntParameter, Parameter
+from pybandits.variable_domains.parameter_types import NumericParameter, CategoricalParameter, BoolParameter, IntParameter, Parameter
 from pymoo.core.variable import Real, Integer, Choice
 
 
