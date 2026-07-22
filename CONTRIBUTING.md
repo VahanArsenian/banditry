@@ -24,6 +24,22 @@ pytest -m "not slow"  # tests (the full suite, including slow NUTS tests: pytest
 
 Please make sure they pass locally before opening a PR.
 
+## Release checklist
+
+1. Bump the version in **four** places: `pyproject.toml`, `src/banditry/__init__.py`
+   (`__version__`), `CITATION.cff` (`version:`), and the README BibTeX (`version = {...}`).
+2. Add a `CHANGELOG.md` entry (and its compare link at the bottom).
+3. Run the full gate: `pytest`, `ruff check .`, `ruff format --check .`,
+   `python -m build && twine check dist/*`.
+4. Commit, push `main`, wait for CI, then push the `vX.Y.Z` tag (triggers the
+   PyPI publish) and create the GitHub Release with the changelog notes
+   (triggers the Zenodo archive).
+5. **After Zenodo archives the release** (a minute or two), update the
+   *version DOI* in `CITATION.cff` (`doi:`) and the README BibTeX (`doi = {...}`)
+   — Zenodo mints a **new version DOI for every release**. The concept DOI in
+   `CITATION.cff` `identifiers:` and the README badge never change. Get the new
+   DOI from `curl -sI https://zenodo.org/badge/latestdoi/<repo-id>`.
+
 ## Guidelines
 
 - Keep pull requests focused — one change per PR.

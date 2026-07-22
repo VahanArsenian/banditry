@@ -7,7 +7,11 @@ authors:
     given-names: Vahan
 version: 0.3.1
 date-released: 2026-07-22
-doi: 10.5281/zenodo.21495325
+doi: 10.5281/zenodo.21499195
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.21495324
+    description: "Concept DOI resolving to the latest version."
 license: MIT
 repository-code: "https://github.com/VahanArsenian/banditry"
 url: "https://github.com/VahanArsenian/banditry"
