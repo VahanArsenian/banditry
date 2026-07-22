@@ -245,11 +245,12 @@ If you use `banditry` in your research, please cite:
 ```bibtex
 @software{banditry,
   author  = {Arsenyan, Vahan},
-  title   = {banditry: contextual bandit agents with Gaussian-process surrogates},
+  title   = {banditry: an online learning framework with optimism-in-the-face-of-uncertainty
+             and posterior-sampling agents},
   year    = {2026},
   url     = {https://github.com/VahanArsenian/banditry},
   doi     = {10.5281/zenodo.21495325},
-  version = {0.3.0}
+  version = {0.3.1}
 }
 ```
 

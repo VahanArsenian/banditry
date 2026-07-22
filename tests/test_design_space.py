@@ -70,27 +70,3 @@ def test_register_parameter_type():
         assert isinstance(space.paras["x"], MyParam)
     finally:
         DesignSpace.parameter_types.pop("mynum", None)
-
-
-def test_register_parmeter_type_deprecated_alias():
-    class MyParam(NumericParameter):
-        pass
-
-    try:
-        with pytest.warns(DeprecationWarning, match="register_parameter_type"):
-            DesignSpace.register_parmeter_type("mynum2", MyParam)
-        assert DesignSpace.parameter_types["mynum2"] is MyParam
-    finally:
-        DesignSpace.parameter_types.pop("mynum2", None)
-
-
-def test_deprecated_contextal_problem_module_warns():
-    import importlib
-    import sys
-
-    sys.modules.pop("banditry.optimisation_subroutines.contextal_problem", None)
-    with pytest.warns(DeprecationWarning, match="contextual_problem"):
-        shim = importlib.import_module("banditry.optimisation_subroutines.contextal_problem")
-    from banditry.optimisation_subroutines.contextual_problem import ContextualProblem
-
-    assert shim.ContextualProblem is ContextualProblem

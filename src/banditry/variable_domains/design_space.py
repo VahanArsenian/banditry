@@ -1,5 +1,3 @@
-import warnings
-
 import pandas as pd
 import torch
 from pymoo.core.variable import Choice, Integer, Real
@@ -113,16 +111,6 @@ class DesignSpace:
                 spec dict of each parameter declared with this type.
         """
         DesignSpace.parameter_types[type_name] = para_class
-
-    @staticmethod
-    def register_parmeter_type(type_name: str, para_class: type[Parameter]):
-        """Deprecated alias for :meth:`register_parameter_type`."""
-        warnings.warn(
-            "DesignSpace.register_parmeter_type is deprecated; use DesignSpace.register_parameter_type instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        DesignSpace.register_parameter_type(type_name, para_class)
 
     def transform(self, data: pd.DataFrame) -> tuple[Tensor, Tensor]:
         """Map a DataFrame of raw parameter values into the model/optimiser domain.
