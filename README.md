@@ -249,7 +249,7 @@ If you use `banditry` in your research, please cite:
              and posterior-sampling agents},
   year    = {2026},
   url     = {https://github.com/VahanArsenian/banditry},
-  doi     = {10.5281/zenodo.21495325},
+  doi     = {10.5281/zenodo.21499195},
   version = {0.3.1}
 }
 ```
