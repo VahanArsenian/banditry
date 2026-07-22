@@ -7,6 +7,7 @@ authors:
     given-names: Vahan
 version: 0.3.0
 date-released: 2026-07-22
+doi: 10.5281/zenodo.21495325
 license: MIT
 repository-code: "https://github.com/VahanArsenian/banditry"
 url: "https://github.com/VahanArsenian/banditry"
