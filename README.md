@@ -1,4 +1,4 @@
-# banditry
+# Banditry: Contextual Bandits and Bayesian Optimization in Python 
 
 [![CI](https://github.com/VahanArsenian/banditry/actions/workflows/ci.yml/badge.svg)](https://github.com/VahanArsenian/banditry/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/banditry)](https://pypi.org/project/banditry/)
