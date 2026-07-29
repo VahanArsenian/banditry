@@ -92,10 +92,12 @@ def default_kern(x, xe, y, total_dim=None, ard_kernel=True, use_product_kernel=T
         if has_num:
             ard_num_dims = x.shape[1] if ard_kernel else None
             kernel = MaternKernel(nu=1.5, ard_num_dims=ard_num_dims, active_dims=torch.arange(x.shape[1]))
-            if ard_kernel:
+            if ard_kernel and x.shape[0] > 1:
                 # if automatic relevance must be determined (it is usually critical
                 # for kernel methods to function properly)
-                # otherwise one must perform adaptive scaling
+                # otherwise one must perform adaptive scaling.
+                # With a single observation there are no pairwise distances
+                # (pdist is empty -> median is NaN), so keep the default init.
                 lscales = kernel.lengthscale.detach().clone().view(1, -1)
                 for i in range(x.shape[1]):
                     idx = np.random.choice(x.shape[0], min(x.shape[0], max_x), replace=False)
